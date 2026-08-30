@@ -151,11 +151,7 @@ html.is-chat body {
   color: #1c1c1e;
   border-bottom-left-radius: 6px;
 }
-.play-line.is-job .play-bubble {
-  background: #fff;
-  color: #737373;
-  border: 1px solid var(--line, #dbdbdb);
-}
+.play-line.is-job { display: none !important; }
 .play-shot {
   display: block;
   width: 100%;
@@ -173,10 +169,19 @@ html.is-chat body {
   margin-top: 4px;
 }
 .home-chat .play-input { width: 100%; }
-.home-chat .invite-wait,
-.play-stage .invite-wait { margin: 0; }
-.play-job {
-  margin: 0 0 6px;
-  color: #737373;
-  font-size: 14px;
+.home-chat .invite-wait.is-chat-wait,
+.play-stage .invite-wait.is-chat-wait {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.home-chat .invite-wait.is-chat-wait .thinking-five,
+.play-stage .invite-wait.is-chat-wait .thinking-five {
+  margin: 0 0 8px;
+}
+.home-chat .invite-wait.is-chat-wait .invite-wait-bar,
+.play-stage .invite-wait.is-chat-wait .invite-wait-bar {
+  margin: 0;
 }

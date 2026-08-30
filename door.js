@@ -499,18 +499,27 @@
     return fresh.some(function (t) { return t && t.a; });
   }
 
+  function scrubJobBubbles() {
+    const logEl = document.getElementById("playLog");
+    if (!logEl) return;
+    logEl.querySelectorAll(".play-line.is-job").forEach(function (el) { el.remove(); });
+  }
+
   function showLook(phase, pct) {
     const waitEl = document.getElementById("playWait");
     const waitBar = document.getElementById("playWaitBar");
-    const jobEl = document.getElementById("playJob");
     const text = jobText(phase, pct);
-    if (jobEl) jobEl.textContent = text;
-    if (waitEl) waitEl.hidden = false;
+    scrubJobBubbles();
+    if (waitEl) {
+      waitEl.hidden = false;
+      waitEl.setAttribute("aria-label", text);
+    }
     if (window.PalMark && waitBar) window.PalMark.mountBar(waitBar);
   }
 
   function hideLook() {
     const waitEl = document.getElementById("playWait");
+    scrubJobBubbles();
     if (waitEl) waitEl.hidden = true;
   }
 

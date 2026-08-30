@@ -90,15 +90,21 @@
     return fresh.some(function (t) { return t && t.a; });
   }
 
+  function scrubJobBubbles() {
+    if (!logEl) return;
+    logEl.querySelectorAll(".play-line.is-job").forEach(function (el) { el.remove(); });
+  }
+
   function showLook(phase, pct) {
-    const jobEl = document.getElementById("playJob");
     const text = jobText(phase, pct);
-    if (jobEl) jobEl.textContent = text;
+    scrubJobBubbles();
     waitEl.hidden = false;
+    waitEl.setAttribute("aria-label", text);
     if (window.PalMark) window.PalMark.mountBar(waitBar);
   }
 
   function hideLook() {
+    scrubJobBubbles();
     waitEl.hidden = true;
   }
 
