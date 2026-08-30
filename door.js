@@ -386,7 +386,15 @@
     document.documentElement.classList.toggle("is-chat", !!on);
     const pane = document.getElementById("homeChat");
     if (pane) pane.hidden = !on;
-    if (feed) feed.hidden = !!on;
+    if (feed) feed.hidden = !!on || hostTab === "todo";
+  }
+
+  function showTodoPane(on) {
+    if (hall) hall.classList.toggle("is-todo", !!on);
+    document.documentElement.classList.toggle("is-todo", !!on);
+    const list = document.getElementById("todoList");
+    if (list) list.hidden = !on;
+    if (feed) feed.hidden = !!on || hostTab === "chat";
   }
 
   function pickTab(tab) {
@@ -394,6 +402,7 @@
     clearSelect();
     paintModes();
     showChatPane(hostTab === "chat");
+    showTodoPane(hostTab === "todo");
     if (hostTab === "chat") loadChatHistory();
     else loadShelf();
   }
@@ -571,12 +580,75 @@
     }
   }
 
+  function todoSub(item) {
+    const bits = [];
+    if (item.no_label) bits.push(item.no_label);
+    if (item.step && item.steps) bits.push(item.step + "/" + item.steps);
+    if (item.detail) bits.push(item.detail);
+    return bits.join(" · ");
+  }
+
+  function todoRow(item) {
+    catalog[item.id] = item;
+    const row = document.createElement("div");
+    row.className = "todo-row" + (item.done ? " is-done" : "");
+    row.dataset.id = item.id;
+    const mark = document.createElement("button");
+    mark.type = "button";
+    mark.className = "todo-mark";
+    mark.setAttribute("aria-label", item.done ? "已完成" : "完成");
+    mark.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12.5l3.5 3.5 7.5-8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    if (!item.done) {
+      mark.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        askDone(item);
+      });
+    }
+    const body = document.createElement("span");
+    body.className = "todo-body";
+    const title = document.createElement("span");
+    title.className = "todo-title";
+    title.textContent = item.step && item.steps
+      ? (item.step + "/" + item.steps + " " + (item.title || ""))
+      : (item.title || "");
+    body.appendChild(title);
+    const sub = todoSub(item);
+    if (sub) {
+      const line = document.createElement("span");
+      line.className = "todo-sub";
+      line.textContent = sub;
+      body.appendChild(line);
+    }
+    row.appendChild(mark);
+    row.appendChild(body);
+    return row;
+  }
+
   async function loadShelf() {
-    if (!feed) return;
     const x = await window.FamiGate.api("/api/shelf?tab=" + encodeURIComponent(hostTab), key, { timeout: 20000 });
     if (!x.j) return;
-    feed.innerHTML = "";
     catalog = {};
+    if (hostTab === "todo") {
+      const list = document.getElementById("todoList");
+      if (!list) return;
+      list.innerHTML = "";
+      const items = x.j.items || [];
+      if (!items.length) {
+        const empty = document.createElement("p");
+        empty.className = "todo-empty";
+        empty.textContent = "還沒有待辦。跟我說要排什麼，我會加進來。";
+        list.appendChild(empty);
+      } else {
+        items.forEach(function (it) { list.appendChild(todoRow(it)); });
+      }
+      if (feed) feed.innerHTML = "";
+      if (tagBoard) tagBoard.hidden = false;
+      layoutStage();
+      return;
+    }
+    if (!feed) return;
+    feed.innerHTML = "";
     (x.j.items || []).forEach(function (it) { feed.appendChild(tileEl(it)); });
     if (tagBoard) tagBoard.hidden = false;
     paintPicks();
@@ -617,24 +689,9 @@
       if (hostTab === "todo") loadShelf();
     });
     nodes.push(form);
-    items.filter(function (t) { return !t.done; }).forEach(function (t) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "tag-apply";
-      btn.style.margin = "8px 0";
-      btn.innerHTML = '<span class="tag-apply-face">完成　' + (t.title || "") + "</span>";
-      btn.addEventListener("click", async function () {
-        await window.FamiGate.api("/api/todo", key, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ op: "done", id: t.id, done: true }),
-          timeout: 15000,
-        });
-        openQueue();
-        if (hostTab === "todo") loadShelf();
-      });
-      nodes.push(btn);
-    });
+    const note = document.createElement("p");
+    note.textContent = items.length ? "待辦在「待辦」那一頁，一行一件。" : "還沒有待辦。";
+    nodes.push(note);
     fillAct("工作佇列", nodes);
   }
 
@@ -661,7 +718,7 @@
     const text = document.getElementById("askText");
     const yes = document.getElementById("askYes");
     const ok = document.getElementById("askOk");
-    if (text) text.textContent = "完成「" + (item.title || "") + "」?";
+    if (text) text.textContent = "這件事已完成?";
     if (yes) yes.hidden = true;
     if (ok) ok.hidden = false;
     if (mask) mask.hidden = false;

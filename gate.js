@@ -1,6 +1,9 @@
 (function () {
   const KEY_RE = /^[A-Za-z0-9_-]{8,128}$/;
   const origin = () => {
+    if (location.hostname === "127.0.0.1" || location.hostname === "localhost") {
+      return location.origin;
+    }
     const o = String(window.VAULT_ORIGIN || "").replace(/\/$/, "");
     if (o) return o;
     if (location.protocol === "http:" || location.protocol === "https:") return location.origin;
