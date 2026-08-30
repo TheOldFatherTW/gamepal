@@ -490,13 +490,17 @@
   }
 
   function lookReady(job, turns, from, q) {
-    const fresh = (turns || []).slice(from);
+    const list = turns || [];
+    const fresh = list.slice(from);
     const hit = q
       ? fresh.some(function (t) { return t && t.a && sameQ(t.q, q); })
       : fresh.some(function (t) { return t && t.a; });
     if (hit) return true;
     if (job.state === "failed" && (!job.q || !q || sameQ(job.q, q))) return true;
-    if (job.state === "done" && job.q && q && sameQ(job.q, q)) return true;
+    if (q && job.q && sameQ(job.q, q) && job.state === "done") {
+      const last = list[list.length - 1];
+      if (last && last.a && sameQ(last.q, q)) return true;
+    }
     return false;
   }
 
@@ -559,7 +563,15 @@
     setJobRun(document.querySelector('.settings-entry[data-job="queue"]'), !!on);
   }
 
-  function paintFresh(turns) {
+  function paintFresh(turns, q) {
+    if (paintedTurns >= turns.length && q) {
+      const last = turns[turns.length - 1];
+      if (last && (last.a || (last.images && last.images.length)) && sameQ(last.q, q)) {
+        chatLine(last.a || "", "pal", last.images);
+        paintedTurns = turns.length;
+        return;
+      }
+    }
     for (let i = paintedTurns; i < turns.length; i++) {
       const t = turns[i];
       if (t && (t.a || (t.images && t.images.length))) chatLine(t.a || "", "pal", t.images);
@@ -589,7 +601,7 @@
           }
           if (lookReady(job, turns, from, q)) {
             hideLook();
-            paintFresh(turns);
+            paintFresh(turns, q);
             return;
           }
         } catch (err) {
