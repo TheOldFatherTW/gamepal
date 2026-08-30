@@ -171,15 +171,16 @@ html.is-chat body {
 .home-chat .play-input { width: 100%; }
 .home-chat .invite-wait.is-chat-wait,
 .play-stage .invite-wait.is-chat-wait {
+  flex: 0 0 auto;
   margin: 0;
-  padding: 0;
+  padding: 0 0 14px;
   background: transparent;
   border: 0;
   box-shadow: none;
 }
 .home-chat .invite-wait.is-chat-wait .thinking-five,
 .play-stage .invite-wait.is-chat-wait .thinking-five {
-  margin: 0 0 8px;
+  margin: 0 0 14px;
 }
 .home-chat .invite-wait.is-chat-wait .invite-wait-bar,
 .play-stage .invite-wait.is-chat-wait .invite-wait-bar {
