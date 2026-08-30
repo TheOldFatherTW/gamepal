@@ -33,6 +33,8 @@
   let hostTab = "chat";
   let chatGame = "elden-ring";
   let chatBusy = false;
+  let paintedTurns = 0;
+  let lookLive = 0;
   let ready = false;
   let booting = false;
   let bootTimer = 0;
@@ -491,6 +493,52 @@
       if (t.q) chatLine(t.q, "me");
       if (t.a || (t.images && t.images.length)) chatLine(t.a || "", "pal", t.images);
     });
+    paintedTurns = turns.length;
+    const job = (x.j && x.j.job) || {};
+    if (job.state === "running" && lookLive === 0) {
+      setLookRun(true);
+      watchLook(job.q || "", paintedTurns);
+    }
+  }
+
+  function setLookRun(on) {
+    if (on) lookLive += 1;
+    else lookLive = Math.max(0, lookLive - 1);
+    const run = lookLive > 0;
+    setCabRun(run);
+    setJobRun(document.querySelector('.settings-entry[data-job="queue"]'), run);
+  }
+
+  function paintFresh(turns) {
+    for (let i = paintedTurns; i < turns.length; i++) {
+      const t = turns[i];
+      if (t && (t.a || (t.images && t.images.length))) chatLine(t.a || "", "pal", t.images);
+    }
+    paintedTurns = turns.length;
+  }
+
+  function sleep(ms) {
+    return new Promise(function (resolve) { window.setTimeout(resolve, ms); });
+  }
+
+  async function watchLook(q, from) {
+    const start = Date.now();
+    try {
+      while (Date.now() - start < 180000) {
+        await sleep(1500);
+        const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(chatGame), key, { timeout: 15000 });
+        const turns = (x.j && x.j.turns) || [];
+        paintFresh(turns);
+        const fresh = turns.slice(from);
+        if (!q && fresh.some(function (t) { return t && t.a; })) return;
+        if (q && fresh.some(function (t) { return t && t.q === q && t.a; })) return;
+      }
+      chatLine("家裡還沒回。再試一次。", "pal");
+    } catch (e) {
+      chatLine("家裡還沒回。再試一次。", "pal");
+    } finally {
+      setLookRun(false);
+    }
   }
 
   async function sendChat() {
@@ -505,18 +553,24 @@
     chatLine(text, "me");
     if (waitEl) waitEl.hidden = false;
     if (window.PalMark && waitBar) window.PalMark.mountBar(waitBar);
+    const from = paintedTurns;
     try {
       const x = await window.FamiGate.api("/api/chat", key, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ game: chatGame, text: text }),
-        timeout: 180000,
+        timeout: 20000,
       });
       const reply = (x.j && x.j.reply) || (x.j && x.j.error) || "這回合沒問到";
       chatLine(reply, "pal", (x.j && x.j.images) || []);
+      if (waitEl) waitEl.hidden = true;
+      chatBusy = false;
+      if (x.j && x.j.pending) {
+        setLookRun(true);
+        watchLook(text, from);
+      }
     } catch (e) {
       chatLine("家裡還沒回。再試一次。", "pal");
-    } finally {
       if (waitEl) waitEl.hidden = true;
       chatBusy = false;
     }
@@ -689,6 +743,12 @@
       if (hostTab === "todo") loadShelf();
     });
     nodes.push(form);
+    const job = (x.j && x.j.job) || {};
+    if (job.state === "running" && job.phase) {
+      const run = document.createElement("p");
+      run.textContent = job.phase;
+      nodes.push(run);
+    }
     const note = document.createElement("p");
     note.textContent = items.length ? "待辦在「待辦」那一頁，一行一件。" : "還沒有待辦。";
     nodes.push(note);
