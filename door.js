@@ -35,7 +35,7 @@
   let chatBusy = false;
   let paintedTurns = 0;
   let lookLive = 0;
-  let jobLine = null;
+  let lookSeq = 0;
   let ready = false;
   let booting = false;
   let bootTimer = 0;
@@ -485,6 +485,20 @@
     return (pct === 0 || pct) ? label + " " + pct + "%" : label;
   }
 
+  function sameQ(a, b) {
+    return String(a || "").trim() === String(b || "").trim();
+  }
+
+  function lookReady(job, turns, from, q) {
+    if (job.state === "failed" || job.state === "done") return true;
+    if ((turns || []).length <= from) return false;
+    const fresh = turns.slice(from);
+    if (q) {
+      return fresh.some(function (t) { return t && t.a && sameQ(t.q, q); });
+    }
+    return fresh.some(function (t) { return t && t.a; });
+  }
+
   function showLook(phase, pct) {
     const waitEl = document.getElementById("playWait");
     const waitBar = document.getElementById("playWaitBar");
@@ -493,21 +507,11 @@
     if (jobEl) jobEl.textContent = text;
     if (waitEl) waitEl.hidden = false;
     if (window.PalMark && waitBar) window.PalMark.mountBar(waitBar);
-    if (jobLine) {
-      const p = jobLine.querySelector("p");
-      if (p) p.textContent = text;
-    } else {
-      jobLine = chatLine(text, "pal", [], "job");
-    }
   }
 
   function hideLook() {
     const waitEl = document.getElementById("playWait");
     if (waitEl) waitEl.hidden = true;
-    if (jobLine) {
-      jobLine.remove();
-      jobLine = null;
-    }
   }
 
   function openChat(id) {
@@ -519,7 +523,6 @@
     const logEl = document.getElementById("playLog");
     if (!logEl) return;
     logEl.innerHTML = "";
-    jobLine = null;
     const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(chatGame), key, { timeout: 15000 });
     const turns = (x.j && x.j.turns) || [];
     if (!turns.length) {
@@ -557,22 +560,23 @@
   }
 
   async function watchLook(q, from) {
+    const seq = ++lookSeq;
     const start = Date.now();
     let misses = 0;
     try {
       while (Date.now() - start < 720000) {
+        if (seq !== lookSeq) return;
         await sleep(1500);
         try {
           const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(chatGame), key, { timeout: 20000 });
+          if (seq !== lookSeq) return;
           misses = 0;
           const job = (x.j && x.j.job) || {};
-          if (job.state === "running") showLook(job.phase || "找攻略中…", job.progress);
           const turns = (x.j && x.j.turns) || [];
-          const fresh = turns.slice(from);
-          const hit = q
-            ? fresh.some(function (t) { return t && t.q === q && t.a; })
-            : fresh.some(function (t) { return t && t.a; });
-          if (hit || job.state === "failed") {
+          if (job.state === "running") {
+            showLook(job.phase || "找攻略中…", job.progress);
+          }
+          if (lookReady(job, turns, from, q)) {
             hideLook();
             paintFresh(turns);
             return;
@@ -586,9 +590,11 @@
     } catch (e) {
       chatLine("家裡還沒回。再試一次。", "pal");
     } finally {
-      hideLook();
-      setLookRun(false);
-      chatBusy = false;
+      if (seq === lookSeq) {
+        hideLook();
+        setLookRun(false);
+        chatBusy = false;
+      }
     }
   }
 

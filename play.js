@@ -13,7 +13,7 @@
   const toggle = document.getElementById("configButton");
   let busy = false;
   let paintedTurns = 0;
-  let jobLine = null;
+  let lookSeq = 0;
 
   function embedded() {
     try { return window.parent && window.parent !== window; } catch (e) { return false; }
@@ -76,26 +76,30 @@
     return (pct === 0 || pct) ? label + " " + pct + "%" : label;
   }
 
+  function sameQ(a, b) {
+    return String(a || "").trim() === String(b || "").trim();
+  }
+
+  function lookReady(job, turns, from, q) {
+    if (job.state === "failed" || job.state === "done") return true;
+    if ((turns || []).length <= from) return false;
+    const fresh = turns.slice(from);
+    if (q) {
+      return fresh.some(function (t) { return t && t.a && sameQ(t.q, q); });
+    }
+    return fresh.some(function (t) { return t && t.a; });
+  }
+
   function showLook(phase, pct) {
     const jobEl = document.getElementById("playJob");
     const text = jobText(phase, pct);
     if (jobEl) jobEl.textContent = text;
     waitEl.hidden = false;
     if (window.PalMark) window.PalMark.mountBar(waitBar);
-    if (jobLine) {
-      const p = jobLine.querySelector("p");
-      if (p) p.textContent = text;
-    } else {
-      jobLine = line(text, "pal", [], "job");
-    }
   }
 
   function hideLook() {
     waitEl.hidden = true;
-    if (jobLine) {
-      jobLine.remove();
-      jobLine = null;
-    }
   }
 
   function sleep(ms) {
@@ -103,22 +107,23 @@
   }
 
   async function watchLook(q, from) {
+    const seq = ++lookSeq;
     const start = Date.now();
     let misses = 0;
     try {
       while (Date.now() - start < 720000) {
+        if (seq !== lookSeq) return;
         await sleep(1500);
         try {
           const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(gameId), key, { timeout: 20000 });
+          if (seq !== lookSeq) return;
           misses = 0;
           const job = (x.j && x.j.job) || {};
-          if (job.state === "running") showLook(job.phase || "找攻略中…", job.progress);
           const turns = (x.j && x.j.turns) || [];
-          const fresh = turns.slice(from);
-          const hit = q
-            ? fresh.some(function (t) { return t && t.q === q && t.a; })
-            : fresh.some(function (t) { return t && t.a; });
-          if (hit || job.state === "failed") {
+          if (job.state === "running") {
+            showLook(job.phase || "找攻略中…", job.progress);
+          }
+          if (lookReady(job, turns, from, q)) {
             hideLook();
             for (let i = from; i < turns.length; i++) {
               const t = turns[i];
@@ -136,8 +141,10 @@
     } catch (e) {
       line("家裡還沒回。再試一次。", "pal");
     } finally {
-      hideLook();
-      busy = false;
+      if (seq === lookSeq) {
+        hideLook();
+        busy = false;
+      }
     }
   }
 
