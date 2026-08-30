@@ -35,6 +35,7 @@
   let chatBusy = false;
   let paintedTurns = 0;
   let lookLive = 0;
+  let jobLine = null;
   let ready = false;
   let booting = false;
   let bootTimer = 0;
@@ -447,15 +448,17 @@
     return window.FamiGate.origin() + "/guide-img?id=" + encodeURIComponent(id) + "&game=" + encodeURIComponent(chatGame) + "&k=" + encodeURIComponent(key);
   }
 
-  function chatLine(text, who, images) {
+  function chatLine(text, who, images, kind) {
     const logEl = document.getElementById("playLog");
-    if (!logEl) return;
+    if (!logEl) return null;
     const wrap = document.createElement("div");
-    wrap.className = "play-line is-" + who;
+    wrap.className = "play-line is-" + who + (kind ? " is-" + kind : "");
+    const bubble = document.createElement("div");
+    bubble.className = "play-bubble";
     if (text) {
       const p = document.createElement("p");
       p.textContent = text;
-      wrap.appendChild(p);
+      bubble.appendChild(p);
     }
     (images || []).forEach(function (im) {
       const img = document.createElement("img");
@@ -463,16 +466,48 @@
       img.alt = im.caption || "";
       img.src = chatImgUrl(im.id);
       img.addEventListener("load", function () { img.classList.add("is-on"); });
-      wrap.appendChild(img);
+      bubble.appendChild(img);
       if (im.caption) {
         const cap = document.createElement("span");
         cap.className = "play-shot-cap";
         cap.textContent = im.caption;
-        wrap.appendChild(cap);
+        bubble.appendChild(cap);
       }
     });
+    wrap.appendChild(bubble);
     logEl.appendChild(wrap);
     logEl.scrollTop = logEl.scrollHeight;
+    return wrap;
+  }
+
+  function jobText(phase, pct) {
+    const label = phase || "找攻略中…";
+    return (pct === 0 || pct) ? label + " " + pct + "%" : label;
+  }
+
+  function showLook(phase, pct) {
+    const waitEl = document.getElementById("playWait");
+    const waitBar = document.getElementById("playWaitBar");
+    const jobEl = document.getElementById("playJob");
+    const text = jobText(phase, pct);
+    if (jobEl) jobEl.textContent = text;
+    if (waitEl) waitEl.hidden = false;
+    if (window.PalMark && waitBar) window.PalMark.mountBar(waitBar);
+    if (jobLine) {
+      const p = jobLine.querySelector("p");
+      if (p) p.textContent = text;
+    } else {
+      jobLine = chatLine(text, "pal", [], "job");
+    }
+  }
+
+  function hideLook() {
+    const waitEl = document.getElementById("playWait");
+    if (waitEl) waitEl.hidden = true;
+    if (jobLine) {
+      jobLine.remove();
+      jobLine = null;
+    }
   }
 
   function openChat(id) {
@@ -484,6 +519,7 @@
     const logEl = document.getElementById("playLog");
     if (!logEl) return;
     logEl.innerHTML = "";
+    jobLine = null;
     const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(chatGame), key, { timeout: 15000 });
     const turns = (x.j && x.j.turns) || [];
     if (!turns.length) {
@@ -496,17 +532,16 @@
     paintedTurns = turns.length;
     const job = (x.j && x.j.job) || {};
     if (job.state === "running" && lookLive === 0) {
+      showLook(job.phase || "找攻略中…", job.progress);
       setLookRun(true);
       watchLook(job.q || "", paintedTurns);
     }
   }
 
   function setLookRun(on) {
-    if (on) lookLive += 1;
-    else lookLive = Math.max(0, lookLive - 1);
-    const run = lookLive > 0;
-    setCabRun(run);
-    setJobRun(document.querySelector('.settings-entry[data-job="queue"]'), run);
+    lookLive = on ? 1 : 0;
+    setCabRun(!!on);
+    setJobRun(document.querySelector('.settings-entry[data-job="queue"]'), !!on);
   }
 
   function paintFresh(turns) {
@@ -523,55 +558,73 @@
 
   async function watchLook(q, from) {
     const start = Date.now();
+    let misses = 0;
     try {
-      while (Date.now() - start < 180000) {
+      while (Date.now() - start < 720000) {
         await sleep(1500);
-        const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(chatGame), key, { timeout: 15000 });
-        const turns = (x.j && x.j.turns) || [];
-        paintFresh(turns);
-        const fresh = turns.slice(from);
-        if (!q && fresh.some(function (t) { return t && t.a; })) return;
-        if (q && fresh.some(function (t) { return t && t.q === q && t.a; })) return;
+        try {
+          const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(chatGame), key, { timeout: 20000 });
+          misses = 0;
+          const job = (x.j && x.j.job) || {};
+          if (job.state === "running") showLook(job.phase || "找攻略中…", job.progress);
+          const turns = (x.j && x.j.turns) || [];
+          const fresh = turns.slice(from);
+          const hit = q
+            ? fresh.some(function (t) { return t && t.q === q && t.a; })
+            : fresh.some(function (t) { return t && t.a; });
+          if (hit || job.state === "failed") {
+            hideLook();
+            paintFresh(turns);
+            return;
+          }
+        } catch (err) {
+          misses += 1;
+          if (misses >= 12) throw err;
+        }
       }
       chatLine("家裡還沒回。再試一次。", "pal");
     } catch (e) {
       chatLine("家裡還沒回。再試一次。", "pal");
     } finally {
+      hideLook();
       setLookRun(false);
+      chatBusy = false;
     }
   }
 
   async function sendChat() {
     if (chatBusy) return;
     const input = document.getElementById("playInput");
-    const waitEl = document.getElementById("playWait");
-    const waitBar = document.getElementById("playWaitBar");
     const text = ((input && input.value) || "").trim();
     if (!text) return;
     chatBusy = true;
     if (input) input.value = "";
     chatLine(text, "me");
-    if (waitEl) waitEl.hidden = false;
-    if (window.PalMark && waitBar) window.PalMark.mountBar(waitBar);
+    showLook("拍照中…", 8);
+    setLookRun(true);
     const from = paintedTurns;
     try {
       const x = await window.FamiGate.api("/api/chat", key, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ game: chatGame, text: text }),
-        timeout: 20000,
+        timeout: 45000,
       });
       const reply = (x.j && x.j.reply) || (x.j && x.j.error) || "這回合沒問到";
       chatLine(reply, "pal", (x.j && x.j.images) || []);
-      if (waitEl) waitEl.hidden = true;
-      chatBusy = false;
       if (x.j && x.j.pending) {
-        setLookRun(true);
+        const job = x.j.job || {};
+        showLook(job.phase || "找攻略中…", job.progress == null ? 28 : job.progress);
         watchLook(text, from);
+        return;
       }
+      hideLook();
+      setLookRun(false);
+      chatBusy = false;
     } catch (e) {
       chatLine("家裡還沒回。再試一次。", "pal");
-      if (waitEl) waitEl.hidden = true;
+      hideLook();
+      setLookRun(false);
       chatBusy = false;
     }
   }

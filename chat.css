@@ -111,7 +111,11 @@ html.is-chat body {
 .hall.is-chat .home-chat:not([hidden]) {
   display: flex;
 }
-.home-chat .play-log {
+.home-chat .play-log,
+.play-stage .play-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -119,30 +123,60 @@ html.is-chat body {
   padding: 8px 2px 12px;
 }
 .play-line {
-  margin: 0 0 14px;
+  display: flex;
+  max-width: 82%;
+  margin: 0;
   font-size: 16px;
   line-height: 1.45;
-  white-space: pre-wrap;
+}
+.play-line.is-me { align-self: flex-end; }
+.play-line.is-pal { align-self: flex-start; }
+.play-bubble {
+  min-width: 0;
+  padding: 10px 14px;
+  border-radius: 18px;
   word-break: break-word;
 }
-.play-line p { margin: 0 0 8px; }
-.play-line.is-me { color: #737373; }
-.play-line.is-pal { color: #1c1c1e; }
+.play-bubble p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.play-line.is-me .play-bubble {
+  background: var(--rose, #c13584);
+  color: #fff;
+  border-bottom-right-radius: 6px;
+}
+.play-line.is-pal .play-bubble {
+  background: #e9e9ef;
+  color: #1c1c1e;
+  border-bottom-left-radius: 6px;
+}
+.play-line.is-job .play-bubble {
+  background: #fff;
+  color: #737373;
+  border: 1px solid var(--line, #dbdbdb);
+}
 .play-shot {
   display: block;
   width: 100%;
-  max-height: 42vh;
+  max-height: 28vh;
   object-fit: contain;
   border-radius: 12px;
   background: #fff;
-  margin: 8px 0 4px;
+  margin: 8px 0 0;
 }
 .play-shot.is-on { opacity: 1; }
 .play-shot-cap {
   display: block;
   color: #737373;
   font-size: 13px;
-  margin-bottom: 8px;
+  margin-top: 4px;
 }
 .home-chat .play-input { width: 100%; }
-.home-chat .invite-wait { margin: 0; }
+.home-chat .invite-wait,
+.play-stage .invite-wait { margin: 0; }
+.play-job {
+  margin: 0 0 6px;
+  color: #737373;
+  font-size: 14px;
+}

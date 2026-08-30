@@ -12,6 +12,8 @@
   const catcher = document.getElementById("readerSettingsCatch");
   const toggle = document.getElementById("configButton");
   let busy = false;
+  let paintedTurns = 0;
+  let jobLine = null;
 
   function embedded() {
     try { return window.parent && window.parent !== window; } catch (e) { return false; }
@@ -39,13 +41,15 @@
     return window.FamiGate.origin() + "/guide-img?id=" + encodeURIComponent(id) + "&game=" + encodeURIComponent(gameId) + "&k=" + encodeURIComponent(key);
   }
 
-  function line(text, who, images) {
+  function line(text, who, images, kind) {
     const wrap = document.createElement("div");
-    wrap.className = "play-line is-" + who;
+    wrap.className = "play-line is-" + who + (kind ? " is-" + kind : "");
+    const bubble = document.createElement("div");
+    bubble.className = "play-bubble";
     if (text) {
       const p = document.createElement("p");
       p.textContent = text;
-      wrap.appendChild(p);
+      bubble.appendChild(p);
     }
     (images || []).forEach(function (im) {
       const img = document.createElement("img");
@@ -53,16 +57,88 @@
       img.alt = im.caption || "";
       img.src = imgUrl(im.id);
       img.addEventListener("load", function () { img.classList.add("is-on"); });
-      wrap.appendChild(img);
+      bubble.appendChild(img);
       if (im.caption) {
         const cap = document.createElement("span");
         cap.className = "play-shot-cap";
         cap.textContent = im.caption;
-        wrap.appendChild(cap);
+        bubble.appendChild(cap);
       }
     });
+    wrap.appendChild(bubble);
     logEl.appendChild(wrap);
     logEl.scrollTop = logEl.scrollHeight;
+    return wrap;
+  }
+
+  function jobText(phase, pct) {
+    const label = phase || "找攻略中…";
+    return (pct === 0 || pct) ? label + " " + pct + "%" : label;
+  }
+
+  function showLook(phase, pct) {
+    const jobEl = document.getElementById("playJob");
+    const text = jobText(phase, pct);
+    if (jobEl) jobEl.textContent = text;
+    waitEl.hidden = false;
+    if (window.PalMark) window.PalMark.mountBar(waitBar);
+    if (jobLine) {
+      const p = jobLine.querySelector("p");
+      if (p) p.textContent = text;
+    } else {
+      jobLine = line(text, "pal", [], "job");
+    }
+  }
+
+  function hideLook() {
+    waitEl.hidden = true;
+    if (jobLine) {
+      jobLine.remove();
+      jobLine = null;
+    }
+  }
+
+  function sleep(ms) {
+    return new Promise(function (resolve) { window.setTimeout(resolve, ms); });
+  }
+
+  async function watchLook(q, from) {
+    const start = Date.now();
+    let misses = 0;
+    try {
+      while (Date.now() - start < 720000) {
+        await sleep(1500);
+        try {
+          const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(gameId), key, { timeout: 20000 });
+          misses = 0;
+          const job = (x.j && x.j.job) || {};
+          if (job.state === "running") showLook(job.phase || "找攻略中…", job.progress);
+          const turns = (x.j && x.j.turns) || [];
+          const fresh = turns.slice(from);
+          const hit = q
+            ? fresh.some(function (t) { return t && t.q === q && t.a; })
+            : fresh.some(function (t) { return t && t.a; });
+          if (hit || job.state === "failed") {
+            hideLook();
+            for (let i = from; i < turns.length; i++) {
+              const t = turns[i];
+              if (t && (t.a || (t.images && t.images.length))) line(t.a || "", "pal", t.images);
+            }
+            paintedTurns = turns.length;
+            return;
+          }
+        } catch (err) {
+          misses += 1;
+          if (misses >= 12) throw err;
+        }
+      }
+      line("家裡還沒回。再試一次。", "pal");
+    } catch (e) {
+      line("家裡還沒回。再試一次。", "pal");
+    } finally {
+      hideLook();
+      busy = false;
+    }
   }
 
   function closeAct() {
@@ -117,21 +193,28 @@
     busy = true;
     input.value = "";
     line(text, "me");
-    waitEl.hidden = false;
-    if (window.PalMark) window.PalMark.mountBar(waitBar);
+    showLook("拍照中…", 8);
+    const from = paintedTurns;
     try {
       const x = await window.FamiGate.api("/api/chat", key, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ game: gameId, text: text }),
-        timeout: 180000,
+        timeout: 45000,
       });
       const reply = (x.j && x.j.reply) || (x.j && x.j.error) || "這回合沒問到";
       line(reply, "pal", (x.j && x.j.images) || []);
+      if (x.j && x.j.pending) {
+        const job = x.j.job || {};
+        showLook(job.phase || "找攻略中…", job.progress == null ? 28 : job.progress);
+        watchLook(text, from);
+        return;
+      }
+      hideLook();
+      busy = false;
     } catch (e) {
       line("家裡還沒回。再試一次。", "pal");
-    } finally {
-      waitEl.hidden = true;
+      hideLook();
       busy = false;
     }
   }
@@ -152,6 +235,12 @@
       if (t.q) line(t.q, "me");
       if (t.a || (t.images && t.images.length)) line(t.a || "", "pal", t.images);
     });
+    paintedTurns = turns.length;
+    const job = (x.j && x.j.job) || {};
+    if (job.state === "running") {
+      showLook(job.phase || "找攻略中…", job.progress);
+      watchLook(job.q || "", paintedTurns);
+    }
   }).catch(function () {});
 
   document.getElementById("backShelf").addEventListener("click", goBack);
