@@ -641,14 +641,14 @@
         body: JSON.stringify({ game: chatGame, text: text }),
         timeout: 45000,
       });
-      const reply = (x.j && x.j.reply) || (x.j && x.j.error) || "這回合沒問到";
-      chatLine(reply, "pal", (x.j && x.j.images) || []);
       if (x.j && x.j.pending) {
         const job = x.j.job || {};
         showLook(job.phase || "找攻略中…", job.progress == null ? 28 : job.progress);
         watchLook(text, from);
         return;
       }
+      const reply = (x.j && x.j.reply) || (x.j && x.j.error) || "這回合沒問到";
+      chatLine(reply, "pal", (x.j && x.j.images) || []);
       hideLook();
       setLookRun(false);
       chatBusy = false;
