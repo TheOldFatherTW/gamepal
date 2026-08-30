@@ -490,13 +490,14 @@
   }
 
   function lookReady(job, turns, from, q) {
-    if (job.state === "failed" || job.state === "done") return true;
-    if ((turns || []).length <= from) return false;
-    const fresh = turns.slice(from);
-    if (q) {
-      return fresh.some(function (t) { return t && t.a && sameQ(t.q, q); });
-    }
-    return fresh.some(function (t) { return t && t.a; });
+    const fresh = (turns || []).slice(from);
+    const hit = q
+      ? fresh.some(function (t) { return t && t.a && sameQ(t.q, q); })
+      : fresh.some(function (t) { return t && t.a; });
+    if (hit) return true;
+    if (job.state === "failed" && (!job.q || !q || sameQ(job.q, q))) return true;
+    if (job.state === "done" && job.q && q && sameQ(job.q, q)) return true;
+    return false;
   }
 
   function scrubJobBubbles() {
@@ -508,8 +509,10 @@
   function showLook(phase, pct) {
     const waitEl = document.getElementById("playWait");
     const waitBar = document.getElementById("playWaitBar");
+    const jobEl = document.getElementById("playJob");
     const text = jobText(phase, pct);
     scrubJobBubbles();
+    if (jobEl) jobEl.textContent = text;
     if (waitEl) {
       waitEl.hidden = false;
       waitEl.setAttribute("aria-label", text);
@@ -575,7 +578,6 @@
     try {
       while (Date.now() - start < 720000) {
         if (seq !== lookSeq) return;
-        await sleep(1500);
         try {
           const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(chatGame), key, { timeout: 20000 });
           if (seq !== lookSeq) return;
@@ -594,6 +596,8 @@
           misses += 1;
           if (misses >= 12) throw err;
         }
+        if (seq !== lookSeq) return;
+        await sleep(1500);
       }
       chatLine("家裡還沒回。再試一次。", "pal");
     } catch (e) {

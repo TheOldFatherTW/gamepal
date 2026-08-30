@@ -185,3 +185,9 @@ html.is-chat body {
 .play-stage .invite-wait.is-chat-wait .invite-wait-bar {
   margin: 0;
 }
+.play-job {
+  margin: 0 0 6px;
+  color: #737373;
+  font-size: 14px;
+  text-align: center;
+}
