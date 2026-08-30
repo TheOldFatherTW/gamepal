@@ -21,7 +21,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./app.css?v=1"/>
+<link rel="stylesheet" href="./app.css?v=3"/>
+<link rel="stylesheet" href="./chat.css?v=2"/>
 <script src="./config.js?v=1756557500"></script>
 <script>
 (function () {
@@ -112,25 +113,23 @@
     </div>
   </div>
   <div class="feed" id="feed"></div>
+  <div class="home-chat" id="homeChat" hidden>
+    <div class="play-log" id="playLog"></div>
+    <div class="invite-wait" id="playWait" hidden>
+      <div class="thinking-five" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="invite-wait-bar" id="playWaitBar"></div>
+    </div>
+    <form class="apple-row play-input" id="playForm">
+      <input id="playInput" maxlength="500" autocomplete="off" enterkeyhint="send" placeholder="跟我說你卡在哪"/>
+      <button type="submit" class="apple-next" aria-label="繼續">
+        <svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="18"/><path d="M15.2 11.5L22.5 18l-7.3 6.5"/></svg>
+      </button>
+    </form>
+  </div>
 </div>
 <aside class="photo-rail" id="photo-rail" hidden aria-label="遊戲操作"></aside>
 <input id="cover-input" type="file" accept="image/*" hidden/>
 <input id="backdrop-input" type="file" accept="image/*" hidden/>
-<div class="batch-tag-mask list-tag-mask" id="findMask" hidden>
-  <div class="list-tag-sheet" id="findSheet">
-    <div class="batch-tag-head">
-      <p id="findTitle">找攻略</p>
-      <button type="button" class="batch-tag-close" id="findClose" aria-label="關閉">×</button>
-    </div>
-    <div class="list-tag-body" id="findBody">
-      <form class="tag-picker-form" id="findForm">
-        <input class="tag-search-input" id="findInput" type="search" name="search" placeholder="找攻略？" enterkeyhint="search" autocomplete="off"/>
-        <button type="submit" class="tag-apply" id="findGo"><span class="tag-apply-face">尋找</span></button>
-      </form>
-      <div id="findHits"></div>
-    </div>
-  </div>
-</div>
 <div class="batch-tag-mask" id="actMask" hidden>
   <div class="batch-tag-sheet" id="actSheet">
     <div class="batch-tag-head">
@@ -181,6 +180,6 @@
 </div>
 <script src="./mark.js?v=1"></script>
 <script src="./gate.js?v=1"></script>
-<script src="./door.js?v=1"></script>
+<script src="./door.js?v=3"></script>
 </body>
 </html>

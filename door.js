@@ -23,7 +23,6 @@
   const CAMERA = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="8" width="17" height="11.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 8l1.4-2.4h5.2L16 8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="13.6" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>';
   const SCENE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5.5 16.2l4.2-4.6 3 3.2 2.2-2.4 3.6 3.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="9" cy="9.2" r="1.3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
   const HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20C10.5 18.4 7.3 15.8 5.4 11.9C4 9.1 5.2 6 8.4 6c1.8 0 3 1.1 3.6 2.2C12.6 7.1 13.8 6 15.6 6c3.2 0 4.4 3.1 3 5.9C16.7 15.8 13.5 18.4 12 20Z"/></svg>';
-  const MAG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15.2 15.2L20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
   const LIST = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M6 12h12M6 17h8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
   const MEM = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 9h8M8 13h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
   let key = "";
@@ -31,13 +30,14 @@
   let settingsWrap = null;
   let settingsCatch = null;
   let catalog = {};
-  let hostTab = "play";
+  let hostTab = "chat";
+  let chatGame = "elden-ring";
+  let chatBusy = false;
   let ready = false;
   let booting = false;
   let bootTimer = 0;
   let holdTimer = 0;
   let holdFired = false;
-  let finding = false;
   let selected = new Set();
   let selectMode = false;
   let readerOpen = false;
@@ -368,27 +368,34 @@
         askDone(item);
         return;
       }
-      openPlay(item.id, item.title);
+      openChat(item.id);
     });
     return btn;
   }
 
-  function paintFindMode() {
+  function paintModes() {
     const bar = document.getElementById("mode-bar");
     if (!bar) return;
     bar.querySelectorAll(".mode-btn").forEach(function (el) {
-      if (el.dataset.mode === "find") el.classList.toggle("is-on", !!finding);
-      else el.classList.toggle("is-on", !finding && el.dataset.mode === hostTab);
+      el.classList.toggle("is-on", el.dataset.mode === hostTab);
     });
   }
 
+  function showChatPane(on) {
+    if (hall) hall.classList.toggle("is-chat", !!on);
+    document.documentElement.classList.toggle("is-chat", !!on);
+    const pane = document.getElementById("homeChat");
+    if (pane) pane.hidden = !on;
+    if (feed) feed.hidden = !!on;
+  }
+
   function pickTab(tab) {
-    hostTab = tab || "play";
-    finding = false;
-    closeFind();
+    hostTab = tab || "chat";
     clearSelect();
-    paintFindMode();
-    loadShelf();
+    paintModes();
+    showChatPane(hostTab === "chat");
+    if (hostTab === "chat") loadChatHistory();
+    else loadShelf();
   }
 
   function ensureModes() {
@@ -397,7 +404,7 @@
     bar.dataset.ready = "1";
     bar.hidden = false;
     if (tagBoard) tagBoard.hidden = false;
-    [["fav", "最愛"], ["play", "進行中"], ["todo", "待辦"]].forEach(function (pair) {
+    [["fav", "最愛"], ["play", "進行中"], ["todo", "待辦"], ["chat", "聊天"]].forEach(function (pair) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "mode-btn" + (hostTab === pair[0] ? " is-on" : "");
@@ -406,29 +413,6 @@
       btn.addEventListener("click", function () { pickTab(pair[0]); });
       bar.appendChild(btn);
     });
-    const findBtn = document.createElement("button");
-    findBtn.type = "button";
-    findBtn.className = "mode-btn mode-find";
-    findBtn.dataset.mode = "find";
-    findBtn.innerHTML = MAG + "<span>找攻略？</span>";
-    findBtn.addEventListener("click", function () {
-      finding = true;
-      paintFindMode();
-      const mask = document.getElementById("findMask");
-      const title = document.getElementById("findTitle");
-      if (title) title.textContent = "找攻略？";
-      if (mask) mask.hidden = false;
-      const input = document.getElementById("findInput");
-      if (input) input.value = "";
-    });
-    bar.appendChild(findBtn);
-  }
-
-  function closeFind() {
-    const mask = document.getElementById("findMask");
-    if (mask) mask.hidden = true;
-    finding = false;
-    paintFindMode();
   }
 
   function closeAct() {
@@ -448,35 +432,85 @@
     });
   }
 
-  function showHits(result) {
-    const body = document.getElementById("findHits");
-    const title = document.getElementById("findTitle");
-    const q = result.q || "";
-    if (title) title.textContent = q ? "是這個嗎" : "找攻略？";
-    if (!body) return;
-    body.innerHTML = "";
-    const hits = result.hits || [];
-    if (!hits.length) {
+  function chatImgUrl(id) {
+    return window.FamiGate.origin() + "/guide-img?id=" + encodeURIComponent(id) + "&game=" + encodeURIComponent(chatGame) + "&k=" + encodeURIComponent(key);
+  }
+
+  function chatLine(text, who, images) {
+    const logEl = document.getElementById("playLog");
+    if (!logEl) return;
+    const wrap = document.createElement("div");
+    wrap.className = "play-line is-" + who;
+    if (text) {
       const p = document.createElement("p");
-      p.textContent = "沒對到，再找一次";
-      body.appendChild(p);
-      return;
+      p.textContent = text;
+      wrap.appendChild(p);
     }
-    const row = document.createElement("div");
-    row.className = "tag-row";
-    hits.forEach(function (hit) {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "tag-chip";
-      chip.textContent = hit.title;
-      chip.addEventListener("click", function () {
-        closeFind();
-        if (hit.kind === "todo") pickTab("todo");
-        else openPlay(hit.id === "elden-ring" || hit.kind === "game" || hit.kind === "term" ? (hit.kind === "todo" ? "elden-ring" : (hit.id || "elden-ring")) : "elden-ring", hit.title);
-      });
-      row.appendChild(chip);
+    (images || []).forEach(function (im) {
+      const img = document.createElement("img");
+      img.className = "play-shot";
+      img.alt = im.caption || "";
+      img.src = chatImgUrl(im.id);
+      img.addEventListener("load", function () { img.classList.add("is-on"); });
+      wrap.appendChild(img);
+      if (im.caption) {
+        const cap = document.createElement("span");
+        cap.className = "play-shot-cap";
+        cap.textContent = im.caption;
+        wrap.appendChild(cap);
+      }
     });
-    body.appendChild(row);
+    logEl.appendChild(wrap);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function openChat(id) {
+    if (id) chatGame = id;
+    pickTab("chat");
+  }
+
+  async function loadChatHistory() {
+    const logEl = document.getElementById("playLog");
+    if (!logEl) return;
+    logEl.innerHTML = "";
+    const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(chatGame), key, { timeout: 15000 });
+    const turns = (x.j && x.j.turns) || [];
+    if (!turns.length) {
+      chatLine("跟我說你卡在哪。地圖、門、道具、敵人，需要圖我會貼給你。", "pal");
+    }
+    turns.forEach(function (t) {
+      if (t.q) chatLine(t.q, "me");
+      if (t.a || (t.images && t.images.length)) chatLine(t.a || "", "pal", t.images);
+    });
+  }
+
+  async function sendChat() {
+    if (chatBusy) return;
+    const input = document.getElementById("playInput");
+    const waitEl = document.getElementById("playWait");
+    const waitBar = document.getElementById("playWaitBar");
+    const text = ((input && input.value) || "").trim();
+    if (!text) return;
+    chatBusy = true;
+    if (input) input.value = "";
+    chatLine(text, "me");
+    if (waitEl) waitEl.hidden = false;
+    if (window.PalMark && waitBar) window.PalMark.mountBar(waitBar);
+    try {
+      const x = await window.FamiGate.api("/api/chat", key, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ game: chatGame, text: text }),
+        timeout: 180000,
+      });
+      const reply = (x.j && x.j.reply) || (x.j && x.j.error) || "這回合沒問到";
+      chatLine(reply, "pal", (x.j && x.j.images) || []);
+    } catch (e) {
+      chatLine("家裡還沒回。再試一次。", "pal");
+    } finally {
+      if (waitEl) waitEl.hidden = true;
+      chatBusy = false;
+    }
   }
 
   function stayOverlayUrl(n) {
@@ -697,7 +731,7 @@
       ensureModes();
       setBoot(false, "");
       if (statusEl) statusEl.textContent = "";
-      await loadShelf();
+      pickTab(hostTab);
       ready = true;
       if (typeof navigator.standalone === "boolean" && !navigator.standalone) {
         const seen = localStorage.getItem("gamepal.installed");
@@ -812,23 +846,13 @@
     }
   });
 
-  const findForm = document.getElementById("findForm");
-  if (findForm) findForm.addEventListener("submit", async function (e) {
+  const playForm = document.getElementById("playForm");
+  if (playForm) playForm.addEventListener("submit", function (e) {
     e.preventDefault();
-    const q = (document.getElementById("findInput").value || "").trim();
-    const x = await window.FamiGate.api("/api/search", key, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ q: q }),
-      timeout: 20000,
-    });
-    if (x.j) showHits(x.j);
+    sendChat();
   });
-  const findClose = document.getElementById("findClose");
-  if (findClose) findClose.addEventListener("click", closeFind);
   const actClose = document.getElementById("actClose");
   if (actClose) actClose.addEventListener("click", closeAct);
-  bindMaskClose("findMask", closeFind);
   bindMaskClose("actMask", closeAct);
   bindMaskClose("askMask", closeAsk);
   const askNo = document.getElementById("askNo");

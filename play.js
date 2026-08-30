@@ -35,11 +35,33 @@
     document.documentElement.classList.remove("settings-open");
   }
 
-  function line(text, who) {
-    const p = document.createElement("p");
-    p.className = "play-line is-" + who;
-    p.textContent = text;
-    logEl.appendChild(p);
+  function imgUrl(id) {
+    return window.FamiGate.origin() + "/guide-img?id=" + encodeURIComponent(id) + "&game=" + encodeURIComponent(gameId) + "&k=" + encodeURIComponent(key);
+  }
+
+  function line(text, who, images) {
+    const wrap = document.createElement("div");
+    wrap.className = "play-line is-" + who;
+    if (text) {
+      const p = document.createElement("p");
+      p.textContent = text;
+      wrap.appendChild(p);
+    }
+    (images || []).forEach(function (im) {
+      const img = document.createElement("img");
+      img.className = "play-shot";
+      img.alt = im.caption || "";
+      img.src = imgUrl(im.id);
+      img.addEventListener("load", function () { img.classList.add("is-on"); });
+      wrap.appendChild(img);
+      if (im.caption) {
+        const cap = document.createElement("span");
+        cap.className = "play-shot-cap";
+        cap.textContent = im.caption;
+        wrap.appendChild(cap);
+      }
+    });
+    logEl.appendChild(wrap);
     logEl.scrollTop = logEl.scrollHeight;
   }
 
@@ -105,7 +127,7 @@
         timeout: 180000,
       });
       const reply = (x.j && x.j.reply) || (x.j && x.j.error) || "這回合沒問到";
-      line(reply, "pal");
+      line(reply, "pal", (x.j && x.j.images) || []);
     } catch (e) {
       line("家裡還沒回。再試一次。", "pal");
     } finally {
@@ -125,6 +147,11 @@
 
   window.FamiGate.api("/api/memory?game=" + encodeURIComponent(gameId), key, { timeout: 15000 }).then(function (x) {
     if (titleEl && x.j && x.j.game === "elden-ring") titleEl.textContent = "艾爾登法環";
+    const turns = (x.j && x.j.turns) || [];
+    turns.forEach(function (t) {
+      if (t.q) line(t.q, "me");
+      if (t.a || (t.images && t.images.length)) line(t.a || "", "pal", t.images);
+    });
   }).catch(function () {});
 
   document.getElementById("backShelf").addEventListener("click", goBack);
