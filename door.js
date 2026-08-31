@@ -12,6 +12,8 @@
   const homeInstall = document.getElementById("home-install");
   const feed = document.getElementById("feed");
   const tagBoard = document.getElementById("tag-board");
+  const shelfBack = document.getElementById("shelf-back");
+  const bookCoverInput = document.getElementById("book-cover-input");
   const cabHud = document.getElementById("cab-hud");
   const faceImg = document.getElementById("face-img");
   const readerName = document.getElementById("reader-name");
@@ -25,14 +27,20 @@
   const HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20C10.5 18.4 7.3 15.8 5.4 11.9C4 9.1 5.2 6 8.4 6c1.8 0 3 1.1 3.6 2.2C12.6 7.1 13.8 6 15.6 6c3.2 0 4.4 3.1 3 5.9C16.7 15.8 13.5 18.4 12 20Z"/></svg>';
   const LIST = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M6 12h12M6 17h8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
   const MEM = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 9h8M8 13h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  const PLUS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8V6.8A1.8 1.8 0 0 1 9.8 5h4.4A1.8 1.8 0 0 1 16 6.8V8M5 8h14M9 11v7M12 11v7M15 11v7M7 8l.8 12.2A1.6 1.6 0 0 0 9.4 22h5.2a1.6 1.6 0 0 0 1.6-1.8L17 8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   let key = "";
   let busy = false;
   let settingsWrap = null;
   let settingsCatch = null;
   let catalog = {};
-  let hostTab = "chat";
-  let chatGame = "elden-ring";
+  let hostTab = "play";
+  let openGame = "";
+  let chatGame = "";
+  let chatId = "1";
+  let rooms = [];
   let chatBusy = false;
+  let chatGearWrap = null;
   let paintedTurns = 0;
   let lookLive = 0;
   let lookSeq = 0;
@@ -45,7 +53,8 @@
   let selectMode = false;
   let readerOpen = false;
   let readerStaySeq = 0;
-  let askUnfavId = "";
+  let askTarget = "";
+  let askKind = "";
 
   function setBoot(on, text) {
     if (!hall) return;
@@ -128,14 +137,12 @@
   }
 
   function closeSettings() {
-    const menu = document.querySelector(".settings-menu");
-    if (menu) menu.hidden = true;
+    document.querySelectorAll(".settings-menu").forEach(function (menu) { menu.hidden = true; });
     if (settingsCatch) settingsCatch.hidden = true;
-    const toggle = document.querySelector(".settings-toggle");
-    if (toggle) {
+    document.querySelectorAll(".settings-toggle").forEach(function (toggle) {
       toggle.setAttribute("aria-expanded", "false");
       toggle.classList.remove("is-live");
-    }
+    });
     document.documentElement.classList.remove("settings-open");
   }
 
@@ -262,8 +269,18 @@
     document.documentElement.classList.toggle("has-rail", !!on);
     if (on && !rail.dataset.ready) {
       rail.dataset.ready = "1";
+      const trash = insButton("rail-trash", TRASH, "丟掉");
+      trash.addEventListener("click", askTrashGames);
+      const cover = insButton("rail-cover", CAMERA, "換封面");
+      cover.addEventListener("click", function () {
+        if (!bookCoverInput || !selected.size) return;
+        bookCoverInput.value = "";
+        bookCoverInput.click();
+      });
       const heart = insButton("rail-heart", HEART, "愛心");
       heart.addEventListener("click", heartSelected);
+      rail.appendChild(trash);
+      rail.appendChild(cover);
       rail.appendChild(heart);
     }
   }
@@ -371,9 +388,29 @@
         askDone(item);
         return;
       }
-      openChat(item.id);
+      openGameLayer(item.id);
     });
     return btn;
+  }
+
+  function paintPlus() {
+    if (!feed || openGame) return;
+    const old = feed.querySelector(".tile-add");
+    if (old) old.remove();
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tile tile-add";
+    btn.dataset.id = "__plus__";
+    btn.setAttribute("aria-label", "佔位框");
+    const plus = document.createElement("span");
+    plus.className = "tile-plus";
+    plus.innerHTML = PLUS;
+    btn.appendChild(plus);
+    btn.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      openNewGame();
+    });
+    feed.appendChild(btn);
   }
 
   function paintModes() {
@@ -384,39 +421,60 @@
     });
   }
 
-  function showChatPane(on) {
-    if (hall) hall.classList.toggle("is-chat", !!on);
-    document.documentElement.classList.toggle("is-chat", !!on);
+  function paintLayer() {
+    const onShelf = !openGame;
+    const onChat = !onShelf && hostTab.indexOf("chat:") === 0;
+    const onTodo = !onShelf && hostTab === "todo";
+    if (hall) {
+      hall.classList.toggle("is-chat", onChat);
+      hall.classList.toggle("is-todo", onTodo);
+    }
+    document.documentElement.classList.toggle("is-chat", onChat);
+    document.documentElement.classList.toggle("is-todo", onTodo);
     const pane = document.getElementById("homeChat");
-    if (pane) pane.hidden = !on;
-    if (feed) feed.hidden = !!on || hostTab === "todo";
-  }
-
-  function showTodoPane(on) {
-    if (hall) hall.classList.toggle("is-todo", !!on);
-    document.documentElement.classList.toggle("is-todo", !!on);
     const list = document.getElementById("todoList");
-    if (list) list.hidden = !on;
-    if (feed) feed.hidden = !!on || hostTab === "chat";
+    if (pane) pane.hidden = !onChat;
+    if (list) list.hidden = !onTodo;
+    if (feed) feed.hidden = !onShelf;
+    if (shelfBack) shelfBack.hidden = onShelf;
+    const gear = document.getElementById("chat-settings");
+    if (gear) gear.hidden = !onChat;
   }
 
   function pickTab(tab) {
-    hostTab = tab || "chat";
+    if (tab === "add-chat") {
+      addChatRoom();
+      return;
+    }
+    hostTab = tab || (openGame ? "todo" : "play");
+    if (hostTab.indexOf("chat:") === 0) {
+      chatId = hostTab.slice(5) || "1";
+    }
     clearSelect();
     paintModes();
-    showChatPane(hostTab === "chat");
-    showTodoPane(hostTab === "todo");
-    if (hostTab === "chat") loadChatHistory();
+    paintLayer();
+    if (hostTab.indexOf("chat:") === 0) loadChatHistory();
+    else if (hostTab === "todo") loadShelf();
     else loadShelf();
   }
 
   function ensureModes() {
     const bar = document.getElementById("mode-bar");
-    if (!bar || bar.dataset.ready) return;
-    bar.dataset.ready = "1";
+    if (!bar) return;
+    bar.innerHTML = "";
     bar.hidden = false;
     if (tagBoard) tagBoard.hidden = false;
-    [["fav", "最愛"], ["play", "進行中"], ["todo", "待辦"], ["chat", "聊天"]].forEach(function (pair) {
+    const buttons = [];
+    if (!openGame) {
+      buttons.push(["play", "遊戲"]);
+    } else {
+      buttons.push(["todo", "待辦"]);
+      rooms.forEach(function (room, i) {
+        buttons.push(["chat:" + room.id, "聊天" + (i + 1)]);
+      });
+      if (rooms.length < 3) buttons.push(["add-chat", "+"]);
+    }
+    buttons.forEach(function (pair) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "mode-btn" + (hostTab === pair[0] ? " is-on" : "");
@@ -425,6 +483,40 @@
       btn.addEventListener("click", function () { pickTab(pair[0]); });
       bar.appendChild(btn);
     });
+    if (shelfBack) shelfBack.hidden = !openGame;
+    ensureChatGear();
+  }
+
+  function firstGameId() {
+    const ids = Object.keys(catalog).filter(function (id) {
+      return catalog[id] && catalog[id].kind === "game";
+    });
+    return openGame || ids[0] || "";
+  }
+
+  async function openGameLayer(id) {
+    if (!id) return;
+    openGame = id;
+    chatGame = id;
+    clearSelect();
+    const memo = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(id), key, { timeout: 15000 });
+    rooms = ((memo.j && memo.j.chats) || []).slice();
+    if (!rooms.length) rooms = [{ id: "1" }];
+    chatId = rooms[0].id;
+    hostTab = "chat:" + chatId;
+    ensureModes();
+    paintLayer();
+    loadChatHistory();
+  }
+
+  function closeGameLayer() {
+    openGame = "";
+    hostTab = "play";
+    rooms = [];
+    chatId = "1";
+    ensureModes();
+    paintLayer();
+    loadShelf();
   }
 
   function closeAct() {
@@ -546,16 +638,16 @@
     if (waitEl) waitEl.hidden = true;
   }
 
-  function openChat(id) {
-    if (id) chatGame = id;
-    pickTab("chat");
+  function chatQuery() {
+    return "game=" + encodeURIComponent(chatGame || openGame) + "&chat=" + encodeURIComponent(chatId || "1");
   }
 
   async function loadChatHistory() {
     const logEl = document.getElementById("playLog");
     if (!logEl) return;
     logEl.innerHTML = "";
-    const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(chatGame), key, { timeout: 15000 });
+    const x = await window.FamiGate.api("/api/memory?" + chatQuery(), key, { timeout: 15000 });
+    if (x.j && x.j.chats) rooms = x.j.chats.slice();
     const turns = (x.j && x.j.turns) || [];
     if (!turns.length) {
       chatLine("跟我說你卡在哪。地圖、門、道具、敵人，需要圖我會貼給你。", "pal");
@@ -602,7 +694,7 @@
       while (Date.now() - start < 210000) {
         if (seq !== lookSeq) return;
         try {
-          const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(chatGame), key, { timeout: 20000 });
+          const x = await window.FamiGate.api("/api/memory?" + chatQuery(), key, { timeout: 20000 });
           if (seq !== lookSeq) return;
           misses = 0;
           const job = (x.j && x.j.job) || {};
@@ -649,7 +741,7 @@
       const x = await window.FamiGate.api("/api/chat", key, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ game: chatGame, text: text }),
+        body: JSON.stringify({ game: chatGame || openGame, chat: chatId || "1", text: text }),
         timeout: 45000,
       });
       if (x.j && x.j.pending) {
@@ -775,7 +867,9 @@
   }
 
   async function loadShelf() {
-    const x = await window.FamiGate.api("/api/shelf?tab=" + encodeURIComponent(hostTab), key, { timeout: 20000 });
+    const tab = openGame ? "todo" : "play";
+    const gameQ = openGame ? "&game=" + encodeURIComponent(openGame) : "";
+    const x = await window.FamiGate.api("/api/shelf?tab=" + encodeURIComponent(tab) + gameQ, key, { timeout: 20000 });
     if (!x.j) return;
     catalog = {};
     if (hostTab === "todo") {
@@ -793,14 +887,17 @@
       }
       if (feed) feed.innerHTML = "";
       if (tagBoard) tagBoard.hidden = false;
+      paintLayer();
       layoutStage();
       return;
     }
     if (!feed) return;
     feed.innerHTML = "";
     (x.j.items || []).forEach(function (it) { feed.appendChild(tileEl(it)); });
+    paintPlus();
     if (tagBoard) tagBoard.hidden = false;
     paintPicks();
+    paintLayer();
     layoutStage();
   }
 
@@ -817,7 +914,8 @@
   }
 
   async function openQueue() {
-    const x = await window.FamiGate.api("/api/memory?game=elden-ring", key, { timeout: 15000 });
+    const gid = firstGameId();
+    const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(gid), key, { timeout: 15000 });
     const items = (x.j && x.j.todos) || [];
     const nodes = [];
     const form = document.createElement("form");
@@ -831,11 +929,12 @@
       await window.FamiGate.api("/api/todo", key, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ op: "add", game: "elden-ring", title: title }),
+        body: JSON.stringify({ op: "add", game: gid, title: title }),
         timeout: 15000,
       });
       openQueue();
       if (hostTab === "todo") loadShelf();
+      else if (openGame) loadShelf();
     });
     nodes.push(form);
     const job = (x.j && x.j.job) || {};
@@ -851,7 +950,8 @@
   }
 
   async function openMemory() {
-    const x = await window.FamiGate.api("/api/memory?game=elden-ring", key, { timeout: 15000 });
+    const gid = firstGameId();
+    const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(gid), key, { timeout: 15000 });
     const facts = (x.j && x.j.facts) || [];
     const nodes = [];
     const p = document.createElement("p");
@@ -864,19 +964,167 @@
   function closeAsk() {
     const mask = document.getElementById("askMask");
     if (mask) mask.hidden = true;
-    askUnfavId = "";
+    askTarget = "";
+    askKind = "";
   }
 
-  function askDone(item) {
-    askUnfavId = item.id;
+  function showAsk(kind, id, message, destroy) {
+    askKind = kind;
+    askTarget = id;
     const mask = document.getElementById("askMask");
     const text = document.getElementById("askText");
     const yes = document.getElementById("askYes");
     const ok = document.getElementById("askOk");
-    if (text) text.textContent = "這件事已完成?";
-    if (yes) yes.hidden = true;
-    if (ok) ok.hidden = false;
+    if (text) text.textContent = message;
+    if (yes) yes.hidden = !destroy;
+    if (ok) ok.hidden = !!destroy;
     if (mask) mask.hidden = false;
+  }
+
+  function askDone(item) {
+    showAsk("todo", item.id, "這件事已完成?", false);
+  }
+
+  function askTrashGames() {
+    if (!selected.size) return;
+    showAsk("del-game", "", "刪掉這款遊戲?", true);
+  }
+
+  function askDeleteChat() {
+    showAsk("del-chat", chatId, "刪掉這個聊天? 對話不會進記憶。", true);
+  }
+
+  function askArchiveChat() {
+    showAsk("archive", chatId, "把這個聊天收進記憶?", false);
+  }
+
+  function ensureChatGear() {
+    const host = document.getElementById("chat-settings");
+    if (!host) return;
+    if (chatGearWrap && chatGearWrap.isConnected) {
+      host.hidden = hostTab.indexOf("chat:") !== 0;
+      return;
+    }
+    chatGearWrap = host;
+    host.innerHTML = "";
+    const toggle = insButton("settings-toggle", GEAR, "設定");
+    toggle.setAttribute("aria-expanded", "false");
+    const menu = document.createElement("div");
+    menu.className = "settings-menu";
+    menu.setAttribute("role", "menu");
+    menu.hidden = true;
+    function row(svg, label, job, onClick) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "settings-entry";
+      btn.dataset.job = job;
+      btn.appendChild(jobBadge(svg));
+      const text = document.createElement("span");
+      text.textContent = label;
+      btn.appendChild(text);
+      btn.addEventListener("click", function () {
+        closeSettings();
+        onClick();
+      });
+      return btn;
+    }
+    menu.appendChild(row(TRASH, "刪除", "drop-chat", askDeleteChat));
+    menu.appendChild(row(MEM, "封存", "archive-chat", askArchiveChat));
+    menu.appendChild(row(CAMERA, "拍照", "shot", takeShot));
+    toggle.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const open = menu.hidden;
+      if (open) {
+        const catcher = ensureSettingsCatch();
+        catcher.hidden = false;
+        document.body.appendChild(menu);
+        menu.hidden = false;
+        document.documentElement.classList.add("settings-open");
+        requestAnimationFrame(function () { placeSettingsMenu(toggle, menu); });
+      } else closeSettings();
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      toggle.classList.toggle("is-live", open);
+    });
+    host.appendChild(toggle);
+    host.appendChild(menu);
+    host.hidden = hostTab.indexOf("chat:") !== 0;
+  }
+
+  function openNewGame() {
+    const form = document.createElement("form");
+    form.className = "tag-picker-form";
+    form.innerHTML = '<input class="tag-search-input" id="gameAdd" maxlength="40" placeholder="遊戲名"/><button type="submit" class="tag-apply"><span class="tag-apply-face">確認</span></button>';
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const input = document.getElementById("gameAdd");
+      const title = ((input && input.value) || "").trim();
+      if (!title) return;
+      await window.FamiGate.api("/api/game", key, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ op: "add", title: title }),
+        timeout: 15000,
+      });
+      closeAct();
+      loadShelf();
+    });
+    fillAct("新遊戲", [form]);
+  }
+
+  async function addChatRoom() {
+    if (!openGame || rooms.length >= 3) return;
+    const x = await window.FamiGate.api("/api/room", key, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op: "add", game: openGame }),
+      timeout: 15000,
+    });
+    rooms = ((x.j && x.j.chats) || rooms).slice();
+    const nid = (x.j && x.j.id) || (rooms[rooms.length - 1] && rooms[rooms.length - 1].id);
+    if (nid) {
+      chatId = nid;
+      hostTab = "chat:" + nid;
+    }
+    ensureModes();
+    paintLayer();
+    loadChatHistory();
+  }
+
+  async function afterRoomChange(x) {
+    rooms = ((x.j && x.j.chats) || []).slice();
+    if (!rooms.length) {
+      hostTab = "todo";
+      chatId = "1";
+      ensureModes();
+      paintLayer();
+      loadShelf();
+      return;
+    }
+    const still = rooms.some(function (r) { return r.id === chatId; });
+    if (!still) chatId = rooms[0].id;
+    hostTab = "chat:" + chatId;
+    ensureModes();
+    paintLayer();
+    loadChatHistory();
+  }
+
+  async function takeShot() {
+    if (!openGame) return;
+    const entry = document.querySelector('.settings-entry[data-job="shot"]');
+    setJobRun(entry, true);
+    setCabRun(true);
+    try {
+      await window.FamiGate.api("/api/shot", key, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ game: openGame }),
+        timeout: 20000,
+      });
+    } finally {
+      setJobRun(entry, false);
+      setCabRun(false);
+    }
   }
 
   async function loadShelfSafe() {
@@ -1068,19 +1316,83 @@
   bindMaskClose("actMask", closeAct);
   bindMaskClose("askMask", closeAsk);
   const askNo = document.getElementById("askNo");
+  const askYes = document.getElementById("askYes");
   const askOk = document.getElementById("askOk");
   if (askNo) askNo.addEventListener("click", closeAsk);
-  if (askOk) askOk.addEventListener("click", async function () {
-    if (askUnfavId) {
+  async function finishAsk() {
+    const kind = askKind;
+    const target = askTarget;
+    const ids = Array.from(selected);
+    closeAsk();
+    if (kind === "todo" && target) {
       await window.FamiGate.api("/api/todo", key, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ op: "done", id: askUnfavId, done: true }),
+        body: JSON.stringify({ op: "done", id: target, done: true }),
         timeout: 15000,
       });
+      loadShelfSafe();
+      return;
     }
-    closeAsk();
-    loadShelfSafe();
+    if (kind === "archive" && openGame && target) {
+      const x = await window.FamiGate.api("/api/room", key, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ op: "archive", game: openGame, chat: target }),
+        timeout: 20000,
+      });
+      afterRoomChange(x);
+      return;
+    }
+    if (kind === "del-chat" && openGame && target) {
+      const x = await window.FamiGate.api("/api/room", key, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ op: "delete", game: openGame, chat: target }),
+        timeout: 15000,
+      });
+      afterRoomChange(x);
+      return;
+    }
+    if (kind === "del-game") {
+      for (let i = 0; i < ids.length; i++) {
+        await window.FamiGate.api("/api/game", key, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ op: "delete", id: ids[i] }),
+          timeout: 15000,
+        });
+      }
+      clearSelect();
+      loadShelf();
+    }
+  }
+  if (askOk) askOk.addEventListener("click", finishAsk);
+  if (askYes) askYes.addEventListener("click", finishAsk);
+  if (shelfBack) shelfBack.addEventListener("click", function (ev) {
+    ev.preventDefault();
+    closeGameLayer();
+  });
+  if (bookCoverInput) bookCoverInput.addEventListener("change", async function () {
+    const file = bookCoverInput.files && bookCoverInput.files[0];
+    if (!file || !selected.size) return;
+    const btn = document.querySelector(".rail-cover");
+    if (btn) btn.classList.add("is-run");
+    showWaitCard("更換封面中");
+    try {
+      const ids = Array.from(selected);
+      for (let i = 0; i < ids.length; i++) {
+        const fd = new FormData();
+        fd.append("cover", file, file.name || "cover.jpg");
+        await fetch(window.FamiGate.origin() + "/api/game-cover?id=" + encodeURIComponent(ids[i]) + "&k=" + encodeURIComponent(key), { method: "POST", body: fd });
+      }
+    } finally {
+      hideWaitCard();
+      if (btn) btn.classList.remove("is-run");
+      bookCoverInput.value = "";
+      clearSelect();
+      loadShelf();
+    }
   });
   const readerBack = document.getElementById("reader-back");
   if (readerBack) readerBack.addEventListener("click", closeReader);

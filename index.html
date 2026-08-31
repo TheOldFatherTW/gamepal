@@ -21,8 +21,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="./app.css?v=4"/>
-<link rel="stylesheet" href="./chat.css?v=9"/>
+<link rel="stylesheet" href="./app.css?v=5"/>
+<link rel="stylesheet" href="./chat.css?v=10"/>
 <script src="./config.js?v=1756557500"></script>
 <script>
 (function () {
@@ -109,7 +109,14 @@
       <p class="reader-name" id="reader-name"></p>
     </div>
     <div class="tag-board" id="tag-board" hidden>
+      <button type="button" class="ins-icon nav-back" id="shelf-back" hidden aria-label="返回">
+        <span class="ins-ring"></span>
+        <span class="ins-face">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5M8.5 12H20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </button>
       <div class="mode-bar" id="mode-bar" hidden></div>
+      <div id="chat-settings" hidden></div>
     </div>
   </div>
   <div class="feed" id="feed"></div>
@@ -132,6 +139,7 @@
 <aside class="photo-rail" id="photo-rail" hidden aria-label="遊戲操作"></aside>
 <input id="cover-input" type="file" accept="image/*" hidden/>
 <input id="backdrop-input" type="file" accept="image/*" hidden/>
+<input id="book-cover-input" type="file" accept="image/*" hidden/>
 <div class="batch-tag-mask" id="actMask" hidden>
   <div class="batch-tag-sheet" id="actSheet">
     <div class="batch-tag-head">
@@ -182,6 +190,6 @@
 </div>
 <script src="./mark.js?v=1"></script>
 <script src="./gate.js?v=2"></script>
-<script src="./door.js?v=15"></script>
+<script src="./door.js?v=16"></script>
 </body>
 </html>

@@ -1,7 +1,8 @@
 (function () {
   const q = new URLSearchParams(location.search);
   const key = window.FamiGate ? window.FamiGate.currentKey() : (q.get("k") || "");
-  const gameId = q.get("id") || "elden-ring";
+  const gameId = q.get("id") || "";
+  const chatId = q.get("chat") || "1";
   const titleEl = document.getElementById("bookTitle");
   const logEl = document.getElementById("playLog");
   const form = document.getElementById("playForm");
@@ -143,7 +144,7 @@
       while (Date.now() - start < 210000) {
         if (seq !== lookSeq) return;
         try {
-          const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(gameId), key, { timeout: 20000 });
+          const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(gameId) + "&chat=" + encodeURIComponent(chatId), key, { timeout: 20000 });
           if (seq !== lookSeq) return;
           misses = 0;
           const job = (x.j && x.j.job) || {};
@@ -240,7 +241,7 @@
       const x = await window.FamiGate.api("/api/chat", key, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ game: gameId, text: text }),
+        body: JSON.stringify({ game: gameId, chat: chatId, text: text }),
         timeout: 45000,
       });
       if (x.j && x.j.pending) {
@@ -269,8 +270,8 @@
     }
   }
 
-  window.FamiGate.api("/api/memory?game=" + encodeURIComponent(gameId), key, { timeout: 15000 }).then(function (x) {
-    if (titleEl && x.j && x.j.game === "elden-ring") titleEl.textContent = "艾爾登法環";
+  window.FamiGate.api("/api/memory?game=" + encodeURIComponent(gameId) + "&chat=" + encodeURIComponent(chatId), key, { timeout: 15000 }).then(function (x) {
+    if (titleEl && x.j && (x.j.title || x.j.game)) titleEl.textContent = x.j.title || x.j.game;
     const turns = (x.j && x.j.turns) || [];
     turns.forEach(function (t) {
       if (t.q) line(t.q, "me");

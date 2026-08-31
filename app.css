@@ -579,7 +579,26 @@ button.settings-entry:active {
     0 1px 2px rgba(255, 255, 255, 0.8),
     0 0 12px rgba(255, 255, 255, 0.7);
 }
-.tag-board { width: 100%; margin: 4px auto 0; text-align: left; }
+.tag-board {
+  width: 100%;
+  margin: 4px auto 0;
+  text-align: left;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.tag-board .mode-bar {
+  flex: 1 1 auto;
+  margin: 0;
+}
+.tag-board .nav-back,
+#chat-settings {
+  flex: 0 0 auto;
+}
+#chat-settings[hidden] {
+  display: none !important;
+}
 html.has-rail .tag-board {
   padding-right: calc(64px + env(safe-area-inset-right, 0px));
 }
@@ -666,6 +685,26 @@ html.has-rail .feed {
   color: transparent;
   /* 多選也維持 manipulation。改 none 時 iOS 會長押變 pointercancel，再當成輕點把同一本取消。 */
   touch-action: manipulation;
+}
+.tile.tile-add {
+  background: #f7f7f7;
+  color: var(--mute);
+  box-shadow: none;
+  border: 2px dashed #c8c8c8;
+}
+.tile .tile-plus {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  pointer-events: none;
+}
+.tile .tile-plus svg {
+  width: 36px;
+  height: 36px;
+  color: #8e8e8e;
 }
 .tile-heart {
   position: absolute;
@@ -1106,6 +1145,45 @@ button.batch-tag-close::before {
   .batch-tag-sheet:not(.list-tag-sheet) .tag-apply {
     margin-top: auto;
   }
+}
+.tag-picker-form,
+form.tag-picker-form {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+}
+.tag-picker-form .tag-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  height: 40px;
+  margin: 0;
+  padding: 8px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 15px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.tag-picker-form .tag-search-input:focus {
+  border-color: #d62976;
+  outline: 2px solid rgba(214, 41, 118, 0.16);
+  outline-offset: 1px;
+}
+.tag-picker-form button[type="submit"]:not(.tag-submit) {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 66px;
+  height: 40px;
+  margin: 0;
+  padding: 8px 16px;
 }
 .err { color: var(--accent); min-height: 1.2em; }
 label { display: block; margin: 18px 0 8px; color: var(--mute); text-align: left; }
