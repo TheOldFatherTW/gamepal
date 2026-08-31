@@ -604,7 +604,7 @@
     const start = Date.now();
     let misses = 0;
     try {
-      while (Date.now() - start < 720000) {
+      while (Date.now() - start < 210000) {
         if (seq !== lookSeq) return;
         try {
           const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(chatGame), key, { timeout: 20000 });
