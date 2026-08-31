@@ -104,7 +104,7 @@
       : fresh.some(function (t) { return t && t.a; });
     if (hit) return true;
     if (job.state === "failed" && (!job.q || !q || sameQ(job.q, q))) return true;
-    if (q && job.q && sameQ(job.q, q) && job.state === "done") {
+    if (q && job.q && sameQ(job.q, q) && job.state === "done" && list.length > from) {
       const last = list[list.length - 1];
       if (last && last.a && sameQ(last.q, q)) return true;
     }
@@ -153,13 +153,9 @@
           }
           if (lookReady(job, turns, from, q)) {
             hideLook();
-            if (paintedTurns >= turns.length && q) {
-              const last = turns[turns.length - 1];
-              if (last && (last.a || (last.images && last.images.length)) && sameQ(last.q, q)) {
-                line(last.a || "", "pal", last.images);
-                paintedTurns = turns.length;
-                return;
-              }
+            if (paintedTurns >= turns.length) {
+              paintedTurns = turns.length;
+              return;
             }
             for (let i = from; i < turns.length; i++) {
               const t = turns[i];
