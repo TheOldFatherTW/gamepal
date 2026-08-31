@@ -448,6 +448,22 @@
     return window.FamiGate.origin() + "/guide-img?id=" + encodeURIComponent(id) + "&game=" + encodeURIComponent(chatGame) + "&k=" + encodeURIComponent(key);
   }
 
+  function fillTalk(el, text) {
+    const parts = String(text || "").split(/(https?:\/\/[^\s<>]+)/g);
+    parts.forEach(function (part, i) {
+      if (i % 2 === 1) {
+        const a = document.createElement("a");
+        a.href = part;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = part;
+        el.appendChild(a);
+      } else if (part) {
+        el.appendChild(document.createTextNode(part));
+      }
+    });
+  }
+
   function chatLine(text, who, images, kind) {
     const logEl = document.getElementById("playLog");
     if (!logEl) return null;
@@ -457,7 +473,7 @@
     bubble.className = "play-bubble";
     if (text) {
       const p = document.createElement("p");
-      p.textContent = text;
+      fillTalk(p, text);
       bubble.appendChild(p);
     }
     (images || []).forEach(function (im) {

@@ -141,6 +141,14 @@ html.is-chat body {
   margin: 0;
   white-space: pre-wrap;
 }
+.play-bubble a {
+  color: inherit;
+  text-decoration: underline;
+  word-break: break-all;
+}
+.play-line.is-pal .play-bubble a {
+  color: #0b57d0;
+}
 .play-line.is-me .play-bubble {
   background: var(--rose, #c13584);
   color: #fff;
