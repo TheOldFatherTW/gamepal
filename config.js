@@ -1,1 +1,1 @@
-window.VAULT_ORIGIN = "https://bite-bool-thousands-bibliography.trycloudflare.com";
+window.VAULT_ORIGIN = "https://guitars-analyze-tee-forgotten.trycloudflare.com";
