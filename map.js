@@ -40,6 +40,7 @@
   let dropId = "";
   let penBtn = null;
   let lootOn = true;
+  let shown = {};
   let drawQ = 0;
   let announced = false;
 
@@ -70,6 +71,34 @@
     const mask = document.getElementById("actMask");
     if (mask) mask.hidden = true;
     draft = null;
+  }
+
+  function filterMask() {
+    return document.getElementById("filterMask");
+  }
+
+  function wideMap() {
+    return window.matchMedia("(min-width: 900px)").matches;
+  }
+
+  function closeFilter() {
+    const mask = filterMask();
+    if (!mask) return;
+    mask.hidden = true;
+    mask.classList.remove("is-dock");
+    document.documentElement.classList.remove("tag-modal-open");
+  }
+
+  function openFilter() {
+    const mask = filterMask();
+    if (!mask) return;
+    fillFilter();
+    mask.hidden = false;
+    if (wideMap()) mask.classList.add("is-dock");
+    else {
+      mask.classList.remove("is-dock");
+      document.documentElement.classList.add("tag-modal-open");
+    }
   }
 
   function closeAsk() {
@@ -261,7 +290,22 @@
     draw();
   }
 
+  function isShown(key) {
+    return shown[key] !== false;
+  }
+
+  function officialKey(kind) {
+    return kind === "grace" ? "grace" : "place";
+  }
+
   function layerPoints() {
+    if (!pack || !layer) return [];
+    return pack.points.filter(function (p) {
+      return p.ui && p.layer === layer.id && isShown(officialKey(p.kind));
+    });
+  }
+
+  function layerPointsAll() {
     if (!pack || !layer) return [];
     return pack.points.filter(function (p) {
       return p.ui && p.layer === layer.id;
@@ -280,7 +324,32 @@
   }
 
   function layerLoot() {
-    return lootOn ? layerLootAll() : [];
+    if (!lootOn) return [];
+    return layerLootAll().filter(function (p) {
+      return isShown(p.type_zh || p.kind || "drop");
+    });
+  }
+
+  function iconUrl(file) {
+    if (!file) return "";
+    return origin() + "/map-icon?game=" + encodeURIComponent(gameId) + "&file=" + encodeURIComponent(file) + "&k=" + encodeURIComponent(key) + "&rev=" + encodeURIComponent(assetRev());
+  }
+
+  function drawIcon(p, pt, big) {
+    const size = big ? 26 : 20;
+    const url = iconUrl(p.icon);
+    if (url) {
+      const img = loadImg(url);
+      if (img.complete && img.naturalWidth) {
+        ctx.drawImage(img, pt.x - size / 2, pt.y - size / 2, size, size);
+        return;
+      }
+      img.onload = requestDraw;
+    }
+    ctx.beginPath();
+    ctx.fillStyle = p.color || "#c13584";
+    ctx.arc(pt.x, pt.y, big ? 6 : 4, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   function pointLabel(p) {
@@ -335,16 +404,11 @@
       ctx.arc(pt.x, pt.y, p === hit ? 7 : 4, 0, Math.PI * 2);
       ctx.fill();
     });
-    if (cam.s > 0.45) {
-      layerLoot().forEach(function (p) {
-        const pt = gameToCanvas(p.ui);
-        if (pt.x < -16 || pt.y < -16 || pt.x > box.width + 16 || pt.y > box.height + 16) return;
-        ctx.beginPath();
-        ctx.fillStyle = p.color || "#c13584";
-        ctx.arc(pt.x, pt.y, p === hit ? 6 : 3, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    }
+    layerLoot().forEach(function (p) {
+      const pt = gameToCanvas(p.ui);
+      if (pt.x < -20 || pt.y < -20 || pt.x > box.width + 20 || pt.y > box.height + 20) return;
+      drawIcon(p, pt, p === hit);
+    });
     layerMarks().forEach(function (p) {
       const pt = gameToCanvas(p.ui);
       ctx.beginPath();
@@ -360,6 +424,7 @@
       ctx.font = "14px -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei', sans-serif";
       ctx.fillText(hintEl.textContent, pt.x + 10, pt.y - 8);
     }
+    paintFilterTitle();
     if (layer.overview) {
       const ov = loadImg(overviewUrl(layer.overview));
       if (ov.complete && ov.naturalWidth) announceReady();
@@ -421,7 +486,7 @@
 
   function findPoint(qv) {
     if (!qv || !pack) return null;
-    const here = layerPoints().concat(layerLootAll()).concat(layerMarks());
+    const here = layerPointsAll().concat(layerLootAll()).concat(layerMarks());
     const all = (pack.points || []).concat(allLoot()).concat(marks);
     function hitName(p, exact) {
       if (!p.ui) return false;
@@ -507,8 +572,7 @@
           markHit = null;
           hit = official.row;
           hintEl.textContent = pointLabel(hit);
-          if (dungeonOf(hit)) openDungeonMenu(ev.clientX, ev.clientY, hit);
-          else closeMenu();
+          closeMenu();
         } else if (drop) {
           markHit = null;
           hit = drop.row;
@@ -549,6 +613,11 @@
     }
     const hitRow = findPoint(qv);
     if (hitRow) {
+      const key = hitRow.type_zh || officialKey(hitRow.kind);
+      if (key && shown[key] === false) {
+        shown[key] = true;
+        fillFilter();
+      }
       if (hitRow.layer !== layer.id) setLayer(hitRow.layer);
       jumpTo(hitRow);
     } else {
@@ -700,65 +769,107 @@
     draw();
   }
 
-  function dungeonOf(host) {
-    if (!pack || !pack.dungeons || !host) return null;
-    if (pack.dungeons[host.id] && (pack.dungeons[host.id].items || []).length) return pack.dungeons[host.id];
-    const name = host.name || "";
-    const rows = Object.keys(pack.dungeons);
-    for (let i = 0; i < rows.length; i++) {
-      const row = pack.dungeons[rows[i]];
-      if (row && row.name === name && (row.items || []).length) return row;
-    }
-    return null;
+  function filterSpec() {
+    const raw = (pack && pack.filters) || {};
+    const official = raw.official && raw.official.length ? raw.official : [
+      { id: "grace", zh: "賜福", kind: "grace" },
+      { id: "place", zh: "設施", kind: "map-point" }
+    ];
+    const groups = raw.groups && raw.groups.length ? raw.groups : [
+      { zh: "裝備", types: ["武器", "防具", "盾牌", "護符", "戰灰"] },
+      { zh: "強化", types: ["黃金種子", "聖盃露滴", "結晶露滴", "淚滴幼體", "鍛造石", "墓地鈴蘭", "幽影樹碎片"] },
+      { zh: "魔法", types: ["魔法", "禱告", "骨灰"] },
+      { zh: "關鍵", types: ["鑰匙", "鈴珠", "地圖碎片", "追憶"] },
+      { zh: "人物", types: ["頭目", "NPC", "入侵"] }
+    ];
+    return { official: official, groups: groups };
   }
 
-  function openDungeonMenu(vx, vy, host) {
-    closeMenu();
-    if (!markMenu || !host) return;
-    const packRow = dungeonOf(host);
-    if (!packRow) return;
-    markMenu.innerHTML = "";
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "settings-entry";
-    btn.dataset.job = "drops";
-    btn.appendChild(jobBadge(LIST));
+  function allFilterKeys() {
+    const spec = filterSpec();
+    const keys = spec.official.map(function (row) { return row.id; });
+    spec.groups.forEach(function (g) {
+      (g.types || []).forEach(function (t) { keys.push(t); });
+    });
+    return keys;
+  }
+
+  function ensureShown() {
+    allFilterKeys().forEach(function (key) {
+      if (shown[key] === undefined) shown[key] = true;
+    });
+  }
+
+  function switchRow(key, label) {
+    const row = document.createElement("label");
+    row.className = "ask-skip";
     const text = document.createElement("span");
-    text.textContent = "掉落物";
-    btn.appendChild(text);
-    btn.addEventListener("click", function () {
-      closeMenu();
-      openDungeonCard(packRow);
+    text.textContent = label;
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = isShown(key);
+    const sw = document.createElement("span");
+    sw.className = "ask-sw";
+    input.addEventListener("change", function () {
+      shown[key] = input.checked;
+      draw();
     });
-    markMenu.appendChild(btn);
-    catcher.hidden = false;
-    document.body.appendChild(markMenu);
-    markMenu.hidden = false;
-    document.documentElement.classList.add("settings-open");
-    markMenu.style.left = Math.max(12, Math.min(window.innerWidth - 232, vx - 20)) + "px";
-    markMenu.style.right = "auto";
-    markMenu.style.top = Math.max(12, Math.min(window.innerHeight - 80, vy + 8)) + "px";
+    row.appendChild(text);
+    row.appendChild(input);
+    row.appendChild(sw);
+    return row;
   }
 
-  function openDungeonCard(packRow) {
-    const list = document.createElement("div");
-    list.className = "tag-row";
-    (packRow.items || []).forEach(function (item) {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "tag-chip";
-      chip.textContent = item.name || "";
-      if (item.type_zh) chip.setAttribute("aria-label", item.type_zh + " " + (item.name || ""));
-      if (item.ui) {
-        chip.addEventListener("click", function () {
-          closeAct();
-          if (item.layer && layer && item.layer !== layer.id) setLayer(item.layer);
-          jumpTo(item);
-        });
-      }
-      list.appendChild(chip);
+  function fillFilter() {
+    const body = document.getElementById("filterBody");
+    const title = document.getElementById("filterTitle");
+    if (!body) return;
+    ensureShown();
+    body.innerHTML = "";
+    const tools = document.createElement("div");
+    tools.className = "filter-tools tag-row";
+    function tool(label, on) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tag-chip";
+      btn.textContent = label;
+      btn.addEventListener("click", function () {
+        allFilterKeys().forEach(function (key) { shown[key] = on; });
+        fillFilter();
+        draw();
+      });
+      return btn;
+    }
+    tools.appendChild(tool("全開", true));
+    tools.appendChild(tool("全關", false));
+    body.appendChild(tools);
+    const spec = filterSpec();
+    const officialBox = document.createElement("div");
+    officialBox.className = "filter-group";
+    const officialHead = document.createElement("p");
+    officialHead.textContent = "官方";
+    officialBox.appendChild(officialHead);
+    spec.official.forEach(function (row) {
+      officialBox.appendChild(switchRow(row.id, row.zh));
     });
-    fillAct(packRow.name || "掉落物", [list]);
+    body.appendChild(officialBox);
+    spec.groups.forEach(function (g) {
+      const box = document.createElement("div");
+      box.className = "filter-group";
+      const head = document.createElement("p");
+      head.textContent = g.zh;
+      box.appendChild(head);
+      (g.types || []).forEach(function (t) {
+        box.appendChild(switchRow(t, t));
+      });
+      body.appendChild(box);
+    });
+    paintFilterTitle();
+  }
+
+  function paintFilterTitle() {
+    const title = document.getElementById("filterTitle");
+    if (title) title.textContent = "顯示　" + (layerLoot().length + layerPoints().length);
   }
 
   function fillMenu() {
@@ -807,6 +918,12 @@
   if (actClose) actClose.addEventListener("click", closeAct);
   bindMaskClose("actMask", closeAct);
   bindMaskClose("askMask", closeAsk);
+  bindMaskClose("filterMask", closeFilter);
+  const filterClose = document.getElementById("filterClose");
+  if (filterClose) filterClose.addEventListener("click", closeFilter);
+  if (window.FamiGate && window.FamiGate.lockSheetPage && filterMask()) {
+    window.FamiGate.lockSheetPage(filterMask());
+  }
   const askNo = document.getElementById("askNo");
   const askYes = document.getElementById("askYes");
   if (askNo) askNo.addEventListener("click", closeAsk);
@@ -832,16 +949,16 @@
       btn.addEventListener("click", function () { setLayer(row.id); });
       chipsEl.appendChild(btn);
     });
-    const lootBtn = document.createElement("button");
-    lootBtn.type = "button";
-    lootBtn.className = "mode-btn is-on";
-    lootBtn.textContent = "道具";
-    lootBtn.addEventListener("click", function () {
-      lootOn = !lootOn;
-      lootBtn.classList.toggle("is-on", lootOn);
-      draw();
+    const filterBtn = document.createElement("button");
+    filterBtn.type = "button";
+    filterBtn.className = "mode-btn mode-find is-on";
+    filterBtn.textContent = "篩選";
+    filterBtn.addEventListener("click", function () {
+      const mask = filterMask();
+      if (mask && !mask.hidden) closeFilter();
+      else openFilter();
     });
-    chipsEl.appendChild(lootBtn);
+    chipsEl.appendChild(filterBtn);
     penBtn = insButton("map-pen", HASH, "新增標記");
     penBtn.addEventListener("click", function (ev) {
       ev.preventDefault();
@@ -850,8 +967,22 @@
     });
     chipsEl.appendChild(penBtn);
     applyMarks(pack);
+    ensureShown();
     setLayer((pack.index.layers[0] || {}).id);
+    if (wideMap()) openFilter();
     resize();
   });
-  window.addEventListener("resize", resize);
+  window.addEventListener("resize", function () {
+    const mask = filterMask();
+    if (mask && !mask.hidden) {
+      if (wideMap()) {
+        mask.classList.add("is-dock");
+        document.documentElement.classList.remove("tag-modal-open");
+      } else {
+        mask.classList.remove("is-dock");
+        document.documentElement.classList.add("tag-modal-open");
+      }
+    }
+    resize();
+  });
 })();

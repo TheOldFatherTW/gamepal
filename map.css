@@ -33,6 +33,55 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.map-stage .list-tag-mask {
+  z-index: 20;
+}
+.map-stage .list-tag-mask[hidden] {
+  display: none !important;
+}
+.filter-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.filter-group {
+  margin: 0 0 16px;
+}
+.filter-group > p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mute);
+}
+.map-stage .list-tag-sheet .ask-skip {
+  margin: 0;
+  padding: 4px 0;
+}
+@media (min-width: 900px) {
+  .map-stage {
+    position: relative;
+  }
+  .map-stage .batch-tag-mask.list-tag-mask.is-dock {
+    position: absolute;
+    inset: 88px auto 52px 0;
+    width: min(280px, 36vw);
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+    background: transparent;
+    pointer-events: none;
+    display: flex;
+  }
+  .map-stage .batch-tag-mask.list-tag-mask.is-dock .list-tag-sheet {
+    pointer-events: auto;
+    width: 100%;
+    min-height: 0;
+    max-height: 100%;
+    border-radius: 16px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  }
+}
 body.famiWeb #loaderContainer {
   position: fixed;
   inset: 0;

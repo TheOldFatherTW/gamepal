@@ -32,7 +32,7 @@
 <script src="./gate.js?v=2"></script>
 <link rel="stylesheet" href="./app.css?v=6"/>
 <link rel="stylesheet" href="./play.css?v=3"/>
-<link rel="stylesheet" href="./map.css?v=5"/>
+<link rel="stylesheet" href="./map.css?v=7"/>
 </head>
 <body class="famiWeb lightTheme">
 <div id="loaderContainer">
@@ -68,6 +68,15 @@
   </div>
   <canvas id="mapCanvas"></canvas>
   <p class="map-hint" id="mapHint"></p>
+  <div class="batch-tag-mask list-tag-mask" id="filterMask" hidden>
+    <div class="list-tag-sheet" id="filterSheet">
+      <div class="batch-tag-head">
+        <p id="filterTitle">顯示</p>
+        <button type="button" class="batch-tag-close" id="filterClose" aria-label="關閉">×</button>
+      </div>
+      <div class="list-tag-body" id="filterBody"></div>
+    </div>
+  </div>
 </div>
 <div class="settings-catch" id="readerSettingsCatch" hidden></div>
 <div class="settings-menu" id="markMenu" hidden role="menu"></div>
@@ -90,6 +99,6 @@
   </div>
 </div>
 <script src="./mark.js?v=1"></script>
-<script src="./map.js?v=8"></script>
+<script src="./map.js?v=10"></script>
 </body>
 </html>
