@@ -7,9 +7,13 @@
 }
 .map-chips {
   display: flex;
+  align-items: center;
   gap: 8px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+.map-chips .ins-icon {
+  flex: 0 0 40px;
 }
 .map-stage .apple-row { width: 100%; }
 #mapCanvas {

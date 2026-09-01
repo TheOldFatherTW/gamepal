@@ -14,12 +14,30 @@
   const cache = new Map();
   const pointers = new Map();
   const MAP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5l7-2 5 2.2v13.8l-5-2.2-7 2-5-2.2V5.5l5 2.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 7.7v10.8M15.5 3.5v10.8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+  const HASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4l-1.2 16M15.2 4l-1.2 16M4.5 9h15M4 15h15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8V6.8A1.8 1.8 0 0 1 9.8 5h4.4A1.8 1.8 0 0 1 16 6.8V8M5 8h14M9 11v7M12 11v7M15 11v7M7 8l.8 12.2A1.6 1.6 0 0 0 9.4 22h5.2a1.6 1.6 0 0 0 1.6-1.8L17 8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const COLORS = [
+    { hex: "#c13584", name: "粉" },
+    { hex: "#d62976", name: "紅" },
+    { hex: "#e8c56b", name: "金" },
+    { hex: "#262626", name: "墨" },
+    { hex: "#962fbf", name: "紫" },
+    { hex: "#4f5bd5", name: "藍" }
+  ];
+  const markMenu = document.getElementById("markMenu");
   let pack = null;
   let layer = null;
   let cam = { x: 0, y: 0, s: 0.2 };
   let drag = null;
   let pinch = null;
   let hit = null;
+  let markHit = null;
+  let marks = [];
+  let lastColor = COLORS[0].hex;
+  let placing = false;
+  let draft = null;
+  let dropId = "";
+  let penBtn = null;
   let drawQ = 0;
   let announced = false;
 
@@ -37,12 +55,103 @@
 
   function closeMenu() {
     if (menu) menu.hidden = true;
+    if (markMenu) markMenu.hidden = true;
     if (catcher) catcher.hidden = true;
     if (toggle) {
       toggle.setAttribute("aria-expanded", "false");
       toggle.classList.remove("is-live");
     }
     document.documentElement.classList.remove("settings-open");
+  }
+
+  function closeAct() {
+    const mask = document.getElementById("actMask");
+    if (mask) mask.hidden = true;
+    draft = null;
+  }
+
+  function closeAsk() {
+    const mask = document.getElementById("askMask");
+    if (mask) mask.hidden = true;
+    dropId = "";
+  }
+
+  function bindMaskClose(maskId, closeFn) {
+    const mask = document.getElementById(maskId);
+    if (!mask) return;
+    if (window.FamiGate && window.FamiGate.lockSheetPage) window.FamiGate.lockSheetPage(mask);
+    let down = false;
+    mask.addEventListener("pointerdown", function (ev) { down = ev.target === mask; });
+    mask.addEventListener("pointerup", function (ev) {
+      if (down && ev.target === mask) closeFn();
+      down = false;
+    });
+  }
+
+  function fillAct(title, nodes) {
+    const mask = document.getElementById("actMask");
+    const head = document.getElementById("actTitle");
+    const body = document.getElementById("actBody");
+    if (head) head.textContent = title;
+    if (body) {
+      body.innerHTML = "";
+      nodes.forEach(function (n) { body.appendChild(n); });
+    }
+    if (mask) mask.hidden = false;
+  }
+
+  function insButton(cls, svg, label) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ins-icon " + cls;
+    btn.setAttribute("aria-label", label);
+    btn.innerHTML = '<span class="ins-ring"></span><span class="ins-face">' + svg + "</span>";
+    return btn;
+  }
+
+  function applyMarks(j) {
+    marks = (j && j.marks) || [];
+    const c = (j && (j.color || j.mark_color)) || "";
+    if (c) lastColor = c;
+  }
+
+  function layerMarks() {
+    if (!layer) return [];
+    return marks.filter(function (p) {
+      return p.ui && p.layer === layer.id;
+    });
+  }
+
+  function paintSwatch(btn, color, on) {
+    btn.classList.toggle("is-on", !!on);
+    if (on) {
+      btn.style.background = "";
+      btn.style.color = "";
+      btn.style.borderColor = "";
+      return;
+    }
+    btn.style.background = color;
+    btn.style.borderColor = color;
+    const n = parseInt(String(color || "").replace("#", ""), 16);
+    const light = ((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114;
+    btn.style.color = light > 160000 ? "#262626" : "#fff";
+  }
+
+  function setPlacing(on) {
+    placing = !!on;
+    if (penBtn) penBtn.classList.toggle("is-live", placing);
+    if (placing) {
+      markHit = null;
+      hit = null;
+      closeMenu();
+      hintEl.textContent = "點地圖放標記";
+    } else if (!document.getElementById("actMask") || document.getElementById("actMask").hidden) {
+      hintEl.textContent = (layer && layer.zh) || "";
+    }
+  }
+
+  function isOwn(point) {
+    return !!(point && point.id && marks.some(function (m) { return m.id === point.id; }));
   }
 
   function origin() {
@@ -202,9 +311,17 @@
       ctx.arc(pt.x, pt.y, p === hit ? 7 : 4, 0, Math.PI * 2);
       ctx.fill();
     });
-    if (hit && hit.ui) {
-      const pt = gameToCanvas(hit.ui);
-      hintEl.textContent = hit.name || (hit.names && hit.names[0]) || "";
+    layerMarks().forEach(function (p) {
+      const pt = gameToCanvas(p.ui);
+      ctx.beginPath();
+      ctx.fillStyle = p.color || lastColor;
+      ctx.arc(pt.x, pt.y, p === markHit ? 8 : 6, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    const shown = markHit || hit;
+    if (shown && shown.ui) {
+      const pt = gameToCanvas(shown.ui);
+      hintEl.textContent = shown.name || (shown.names && shown.names[0]) || "";
       ctx.fillStyle = "rgba(255,255,255,0.92)";
       ctx.font = "14px -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei', sans-serif";
       ctx.fillText(hintEl.textContent, pt.x + 10, pt.y - 8);
@@ -217,10 +334,11 @@
     }
   }
 
-  function nearest(px, py) {
+  function nearestOf(rows, px, py) {
     let best = null;
     let bestD = 22;
-    layerPoints().forEach(function (p) {
+    rows.forEach(function (p) {
+      if (!p.ui) return;
       const pt = gameToCanvas(p.ui);
       const d = Math.hypot(pt.x - px, pt.y - py);
       if (d < bestD) {
@@ -228,17 +346,18 @@
         bestD = d;
       }
     });
-    return best;
+    return best ? { row: best, d: bestD } : null;
   }
 
   function setLayer(id) {
     layer = (pack.index.layers || []).find(function (row) { return row.id === id; }) || pack.index.layers[0];
-    Array.from(chipsEl.children).forEach(function (btn) {
+    Array.from(chipsEl.querySelectorAll(".mode-btn")).forEach(function (btn) {
       btn.classList.toggle("is-on", btn.dataset.id === layer.id);
     });
     fitLayer();
     hit = null;
-    hintEl.textContent = layer.zh || "";
+    markHit = null;
+    hintEl.textContent = placing ? "點地圖放標記" : (layer.zh || "");
     draw();
   }
 
@@ -249,7 +368,13 @@
     const h = worldH();
     cam.x = point.ui.x * cam.s - box.width / 2;
     cam.y = (h - point.ui.y) * cam.s - box.height / 2;
-    hit = point;
+    if (isOwn(point)) {
+      markHit = point;
+      hit = null;
+    } else {
+      markHit = null;
+      hit = point;
+    }
     hintEl.textContent = point.name || "";
     draw();
   }
@@ -262,14 +387,15 @@
 
   function findPoint(qv) {
     if (!qv || !pack) return null;
-    const all = pack.points || [];
+    const here = layerPoints().concat(layerMarks());
+    const all = (pack.points || []).concat(marks);
     function hitName(p, exact) {
       if (!p.ui) return false;
       return namesOf(p).some(function (n) { return exact ? n === qv : n.indexOf(qv) >= 0; });
     }
-    return layerPoints().find(function (p) { return hitName(p, true); })
+    return here.find(function (p) { return hitName(p, true); })
       || all.find(function (p) { return hitName(p, true); })
-      || layerPoints().find(function (p) { return hitName(p, false); })
+      || here.find(function (p) { return hitName(p, false); })
       || all.find(function (p) { return hitName(p, false); });
   }
 
@@ -328,9 +454,28 @@
   canvas.addEventListener("pointerup", function (ev) {
     const box = canvas.getBoundingClientRect();
     if (drag && !drag.moved && !pinch) {
-      hit = nearest(ev.clientX - box.left, ev.clientY - box.top);
-      hintEl.textContent = hit ? (hit.name || "") : (layer && layer.zh) || "";
-      draw();
+      const px = ev.clientX - box.left;
+      const py = ev.clientY - box.top;
+      if (placing && layer) {
+        draft = { ui: canvasToGame(px, py), layer: layer.id };
+        setPlacing(false);
+        openMarkCard();
+      } else {
+        const own = nearestOf(layerMarks(), px, py);
+        const official = nearestOf(layerPoints(), px, py);
+        if (own && (!official || own.d <= official.d)) {
+          markHit = own.row;
+          hit = null;
+          hintEl.textContent = markHit.name || "";
+          openMarkMenu(ev.clientX, ev.clientY);
+        } else {
+          markHit = null;
+          hit = official ? official.row : null;
+          hintEl.textContent = hit ? (hit.name || "") : (layer && layer.zh) || "";
+          closeMenu();
+        }
+        draw();
+      }
     }
     pointers.delete(ev.pointerId);
     if (pointers.size < 2) pinch = null;
@@ -371,6 +516,142 @@
     badge.setAttribute("aria-hidden", "true");
     badge.innerHTML = '<span class="ins-ring"></span><span class="ins-face">' + svg + "</span>";
     return badge;
+  }
+
+  function openMarkCard() {
+    const row = draft && draft.id ? marks.find(function (m) { return m.id === draft.id; }) : null;
+    const name = (row && row.name) || "";
+    const color = (row && row.color) || lastColor;
+    lastColor = color;
+    const form = document.createElement("form");
+    form.className = "apple-row";
+    const input = document.createElement("input");
+    input.id = "markName";
+    input.maxLength = 40;
+    input.placeholder = "名字";
+    input.value = name;
+    input.autocomplete = "off";
+    form.appendChild(input);
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      saveMark();
+    });
+    const colors = document.createElement("div");
+    colors.className = "tag-row";
+    COLORS.forEach(function (c) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "tag-chip";
+      chip.dataset.color = c.hex;
+      chip.setAttribute("aria-label", c.name);
+      chip.textContent = c.name;
+      paintSwatch(chip, c.hex, c.hex === lastColor);
+      chip.addEventListener("click", function () {
+        lastColor = c.hex;
+        Array.from(colors.children).forEach(function (btn) {
+          paintSwatch(btn, btn.dataset.color, btn.dataset.color === lastColor);
+        });
+      });
+      colors.appendChild(chip);
+    });
+    const ok = document.createElement("button");
+    ok.type = "button";
+    ok.className = "tag-apply";
+    ok.innerHTML = '<span class="tag-apply-face">確認</span>';
+    ok.addEventListener("click", saveMark);
+    fillAct("標記", [form, colors, ok]);
+    window.setTimeout(function () { input.focus(); }, 50);
+  }
+
+  function openMarkMenu(vx, vy) {
+    closeMenu();
+    if (!markMenu || !markHit) return;
+    markMenu.innerHTML = "";
+    function row(svg, label, job, onClick) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "settings-entry";
+      btn.dataset.job = job;
+      btn.appendChild(jobBadge(svg));
+      const text = document.createElement("span");
+      text.textContent = label;
+      btn.appendChild(text);
+      btn.addEventListener("click", function () {
+        closeMenu();
+        onClick();
+      });
+      return btn;
+    }
+    markMenu.appendChild(row(HASH, "改名／改色", "edit", function () {
+      draft = { id: markHit.id, ui: markHit.ui, layer: markHit.layer };
+      openMarkCard();
+    }));
+    markMenu.appendChild(row(TRASH, "丟棄", "drop", function () {
+      dropId = markHit.id;
+      const mask = document.getElementById("askMask");
+      const text = document.getElementById("askText");
+      if (text) text.textContent = "丟掉這個標記?";
+      if (mask) mask.hidden = false;
+    }));
+    catcher.hidden = false;
+    document.body.appendChild(markMenu);
+    markMenu.hidden = false;
+    document.documentElement.classList.add("settings-open");
+    const w = 220;
+    markMenu.style.left = Math.max(12, Math.min(window.innerWidth - w - 12, vx - 20)) + "px";
+    markMenu.style.right = "auto";
+    markMenu.style.top = Math.max(12, Math.min(window.innerHeight - 120, vy + 8)) + "px";
+  }
+
+  async function saveMark() {
+    const input = document.getElementById("markName");
+    const name = ((input && input.value) || "").trim();
+    if (!name || !draft) return;
+    const body = {
+      op: "save",
+      game: gameId,
+      name: name,
+      color: lastColor,
+      layer: draft.layer || (layer && layer.id) || "",
+      ui: draft.ui
+    };
+    if (draft.id) body.id = draft.id;
+    const x = await window.FamiGate.api("/api/map-marks", key, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      timeout: 15000
+    });
+    if (!x || !x.j || !x.j.ok) return;
+    applyMarks(x.j);
+    const item = x.j.item;
+    draft = null;
+    closeAct();
+    if (item) {
+      if (item.layer && layer && item.layer !== layer.id) setLayer(item.layer);
+      jumpTo(item);
+    } else {
+      draw();
+    }
+  }
+
+  async function dropMark() {
+    if (!dropId) {
+      closeAsk();
+      return;
+    }
+    const x = await window.FamiGate.api("/api/map-marks", key, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op: "drop", game: gameId, id: dropId }),
+      timeout: 15000
+    });
+    if (x && x.j && x.j.ok) applyMarks(x.j);
+    if (markHit && markHit.id === dropId) markHit = null;
+    dropId = "";
+    closeAsk();
+    hintEl.textContent = (layer && layer.zh) || "";
+    draw();
   }
 
   function fillMenu() {
@@ -415,6 +696,15 @@
     });
   }
   if (catcher) catcher.addEventListener("click", closeMenu);
+  const actClose = document.getElementById("actClose");
+  if (actClose) actClose.addEventListener("click", closeAct);
+  bindMaskClose("actMask", closeAct);
+  bindMaskClose("askMask", closeAsk);
+  const askNo = document.getElementById("askNo");
+  const askYes = document.getElementById("askYes");
+  if (askNo) askNo.addEventListener("click", closeAsk);
+  if (askYes) askYes.addEventListener("click", dropMark);
+  if (window.FamiGate && window.FamiGate.bindKeyboard) window.FamiGate.bindKeyboard();
 
   try { window.parent.postMessage({ fami: "reader-loading" }, location.origin); } catch (e) {}
   window.FamiGate.api("/api/map?game=" + encodeURIComponent(gameId), key, { timeout: 30000 }).then(function (x) {
@@ -435,6 +725,14 @@
       btn.addEventListener("click", function () { setLayer(row.id); });
       chipsEl.appendChild(btn);
     });
+    penBtn = insButton("map-pen", HASH, "新增標記");
+    penBtn.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      setPlacing(!placing);
+    });
+    chipsEl.appendChild(penBtn);
+    applyMarks(pack);
     setLayer((pack.index.layers[0] || {}).id);
     resize();
   });

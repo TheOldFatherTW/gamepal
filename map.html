@@ -32,7 +32,7 @@
 <script src="./gate.js?v=2"></script>
 <link rel="stylesheet" href="./app.css?v=6"/>
 <link rel="stylesheet" href="./play.css?v=3"/>
-<link rel="stylesheet" href="./map.css?v=4"/>
+<link rel="stylesheet" href="./map.css?v=5"/>
 </head>
 <body class="famiWeb lightTheme">
 <div id="loaderContainer">
@@ -70,7 +70,26 @@
   <p class="map-hint" id="mapHint"></p>
 </div>
 <div class="settings-catch" id="readerSettingsCatch" hidden></div>
+<div class="settings-menu" id="markMenu" hidden role="menu"></div>
+<div class="batch-tag-mask" id="actMask" hidden>
+  <div class="batch-tag-sheet" id="actSheet">
+    <div class="batch-tag-head">
+      <p id="actTitle">標記</p>
+      <button type="button" class="batch-tag-close" id="actClose" aria-label="關閉">×</button>
+    </div>
+    <div id="actBody"></div>
+  </div>
+</div>
+<div class="ask-mask" id="askMask" hidden>
+  <div class="ask-card" role="dialog" aria-modal="true">
+    <p id="askText">丟掉這個標記?</p>
+    <div class="ask-actions">
+      <button type="button" class="ask-no" id="askNo">取消</button>
+      <button type="button" class="ask-yes" id="askYes">丟掉</button>
+    </div>
+  </div>
+</div>
 <script src="./mark.js?v=1"></script>
-<script src="./map.js?v=6"></script>
+<script src="./map.js?v=7"></script>
 </body>
 </html>
