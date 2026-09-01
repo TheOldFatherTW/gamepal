@@ -54,13 +54,17 @@
     return n > 0 ? n : 4;
   }
 
+  function assetRev() {
+    return (pack && pack.index && pack.index.rev) || "";
+  }
+
   function tileUrl(mapId, level, x, y) {
-    return origin() + "/map-tile?game=" + encodeURIComponent(gameId) + "&map=" + mapId + "&level=" + level + "&x=" + x + "&y=" + y + "&k=" + encodeURIComponent(key);
+    return origin() + "/map-tile?game=" + encodeURIComponent(gameId) + "&map=" + mapId + "&level=" + level + "&x=" + x + "&y=" + y + "&k=" + encodeURIComponent(key) + "&rev=" + encodeURIComponent(assetRev());
   }
 
   function overviewUrl(file) {
     const name = String(file || "").split("/").pop();
-    return origin() + "/map-overview?game=" + encodeURIComponent(gameId) + "&file=" + encodeURIComponent(name) + "&k=" + encodeURIComponent(key);
+    return origin() + "/map-overview?game=" + encodeURIComponent(gameId) + "&file=" + encodeURIComponent(name) + "&k=" + encodeURIComponent(key) + "&rev=" + encodeURIComponent(assetRev());
   }
 
   function loadImg(url) {
