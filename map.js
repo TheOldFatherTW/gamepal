@@ -48,6 +48,8 @@
   }
 
   function overviewScale() {
+    const local = layer && Number(layer.overview_scale);
+    if (local > 0) return local;
     const n = pack && pack.index && Number(pack.index.overview_scale);
     return n > 0 ? n : 4;
   }
@@ -71,9 +73,22 @@
     return img;
   }
 
+  function tileSize() {
+    return (layer && layer.tile) || 256;
+  }
+
   function worldH() {
     if (!layer) return 1;
-    return (layer.y1 + 1) * (layer.tile || 256);
+    return (layer.y1 + 1) * tileSize();
+  }
+
+  function contentBox() {
+    const tile = tileSize();
+    const x0 = (layer.cx0 != null ? layer.cx0 : layer.x0) * tile;
+    const y0 = (layer.cy0 != null ? layer.cy0 : layer.y0) * tile;
+    const x1 = ((layer.cx1 != null ? layer.cx1 : layer.x1) + 1) * tile;
+    const y1 = ((layer.cy1 != null ? layer.cy1 : layer.y1) + 1) * tile;
+    return { x0: x0, y0: y0, x1: x1, y1: y1, w: x1 - x0, h: y1 - y0 };
   }
 
   function gameToCanvas(ui) {
@@ -93,13 +108,11 @@
   }
 
   function fitLayer() {
-    const tile = layer.tile || 256;
-    const w = (layer.x1 + 1) * tile;
-    const h = (layer.y1 + 1) * tile;
+    const world = contentBox();
     const box = canvas.getBoundingClientRect();
-    cam.s = Math.min(box.width / w, box.height / h);
-    cam.x = -(box.width - w * cam.s) / 2;
-    cam.y = -(box.height - h * cam.s) / 2;
+    cam.s = Math.min(box.width / world.w, box.height / world.h);
+    cam.x = world.x0 * cam.s - (box.width - world.w * cam.s) / 2;
+    cam.y = (worldH() - world.y1) * cam.s - (box.height - world.h * cam.s) / 2;
   }
 
   function resize() {
