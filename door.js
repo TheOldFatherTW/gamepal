@@ -29,6 +29,7 @@
   const MEM = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 9h8M8 13h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
   const PLUS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
   const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8V6.8A1.8 1.8 0 0 1 9.8 5h4.4A1.8 1.8 0 0 1 16 6.8V8M5 8h14M9 11v7M12 11v7M15 11v7M7 8l.8 12.2A1.6 1.6 0 0 0 9.4 22h5.2a1.6 1.6 0 0 0 1.6-1.8L17 8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const MAP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5l7-2 5 2.2v13.8l-5-2.2-7 2-5-2.2V5.5l5 2.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 7.7v10.8M15.5 3.5v10.8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
   let key = "";
   let busy = false;
   let settingsWrap = null;
@@ -817,8 +818,35 @@
     }, 400);
     if (title) {
       const hint = document.getElementById("reader-hint");
+      const wait = hint && hint.querySelector(".read-wait");
+      if (wait) wait.textContent = "打開陪玩";
       if (hint) hint.hidden = false;
     }
+  }
+
+  function openMap(id) {
+    const gid = id || chatGame || openGame || "elden-ring";
+    const layer = document.getElementById("reader-layer");
+    const frame = document.getElementById("reader-frame");
+    const href = "./map.html?id=" + encodeURIComponent(gid) + "&k=" + encodeURIComponent(key) + "#k=" + encodeURIComponent(key);
+    if (!layer || !frame) {
+      location.href = href;
+      return;
+    }
+    document.documentElement.classList.add("is-reading");
+    layer.hidden = false;
+    layer.classList.remove("is-live");
+    const wasOpen = readerOpen;
+    readerOpen = true;
+    if (!wasOpen) padOverlay();
+    const hint = document.getElementById("reader-hint");
+    const wait = hint && hint.querySelector(".read-wait");
+    if (wait) wait.textContent = "打開地圖";
+    if (hint) hint.hidden = false;
+    frame.src = href;
+    window.setTimeout(function () {
+      if (readerOpen) layer.classList.add("is-live");
+    }, 400);
   }
 
   function todoSub(item) {
@@ -1028,6 +1056,7 @@
       });
       return btn;
     }
+    menu.appendChild(row(MAP, "地圖", "map", function () { openMap(chatGame || openGame); }));
     menu.appendChild(row(TRASH, "刪除", "drop-chat", askDeleteChat));
     menu.appendChild(row(MEM, "封存", "archive-chat", askArchiveChat));
     menu.appendChild(row(CAMERA, "拍照", "shot", takeShot));

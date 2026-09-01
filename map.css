@@ -1,0 +1,31 @@
+.map-stage {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 64px - env(safe-area-inset-top, 0px));
+  padding: 0 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  gap: 8px;
+}
+.map-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.map-stage .apple-row { width: 100%; }
+#mapCanvas {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border-radius: 16px;
+  background: #1c2228;
+  touch-action: none;
+}
+.map-hint {
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 14px;
+  color: #1c1c1e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

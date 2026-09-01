@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"/>
+<script>
+(function () {
+  function stopZoom(ev) { ev.preventDefault(); }
+  document.addEventListener("gesturestart", stopZoom, { passive: false });
+  document.addEventListener("gesturechange", stopZoom, { passive: false });
+})();
+</script>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="GamePal"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="theme-color" content="#f2f2f7"/>
+<link rel="apple-touch-icon" href="./icons/mark-180.png?v=1"/>
+<title>地圖</title>
+<script src="./config.js?v=1756557500"></script>
+<script src="./gate.js?v=2"></script>
+<link rel="stylesheet" href="./app.css?v=5"/>
+<link rel="stylesheet" href="./play.css?v=3"/>
+<link rel="stylesheet" href="./map.css?v=2"/>
+</head>
+<body class="famiWeb lightTheme">
+<div id="topMenu" class="navMenu">
+  <div class="navContainer">
+    <button type="button" id="backShelf" class="ins-icon nav-back" aria-label="返回">
+      <span class="ins-ring"></span>
+      <span class="ins-face">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5M8.5 12H20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+    </button>
+    <div id="bookInfo">
+      <h2 id="bookTitle">地圖</h2>
+    </div>
+    <div id="reader-settings" class="album-settings">
+      <button type="button" id="configButton" class="ins-icon settings-toggle" aria-label="設定" aria-expanded="false">
+        <span class="ins-ring"></span>
+        <span class="ins-face">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.6 3.8l.6-1.3h3.6l.6 1.3 1.6.7 1.4-.5 2.5 2.5-.5 1.4.7 1.6 1.3.6v3.6l-1.3.6-.7 1.6.5 1.4-2.5 2.5-1.4-.5-1.6.7-.6 1.3h-3.6l-.6-1.3-1.6-.7-1.4.5-2.5-2.5.5-1.4-.7-1.6-1.3-.6v-3.6l1.3-.6.7-1.6-.5-1.4L6.6 4l1.4.5 1.6-.7z" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"/><circle cx="12" cy="11.9" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        </span>
+      </button>
+      <div id="readerSettingsMenu" class="settings-menu" hidden role="menu"></div>
+    </div>
+  </div>
+</div>
+<div class="map-stage">
+  <div class="map-chips" id="mapChips" role="tablist"></div>
+  <div class="apple-row">
+    <input id="mapFind" type="search" placeholder="查賜福或地名" enterkeyhint="search"/>
+  </div>
+  <canvas id="mapCanvas"></canvas>
+  <p class="map-hint" id="mapHint"></p>
+</div>
+<div class="settings-catch" id="readerSettingsCatch" hidden></div>
+<script src="./mark.js?v=1"></script>
+<script src="./map.js?v=2"></script>
+</body>
+</html>
