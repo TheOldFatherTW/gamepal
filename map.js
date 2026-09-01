@@ -16,6 +16,7 @@
   const MAP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5l7-2 5 2.2v13.8l-5-2.2-7 2-5-2.2V5.5l5 2.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 7.7v10.8M15.5 3.5v10.8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
   const HASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4l-1.2 16M15.2 4l-1.2 16M4.5 9h15M4 15h15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
   const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8V6.8A1.8 1.8 0 0 1 9.8 5h4.4A1.8 1.8 0 0 1 16 6.8V8M5 8h14M9 11v7M12 11v7M15 11v7M7 8l.8 12.2A1.6 1.6 0 0 0 9.4 22h5.2a1.6 1.6 0 0 0 1.6-1.8L17 8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const LIST = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M6 12h12M6 17h8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
   const COLORS = [
     { hex: "#c13584", name: "粉" },
     { hex: "#d62976", name: "紅" },
@@ -38,6 +39,7 @@
   let draft = null;
   let dropId = "";
   let penBtn = null;
+  let lootOn = true;
   let drawQ = 0;
   let announced = false;
 
@@ -266,6 +268,28 @@
     });
   }
 
+  function allLoot() {
+    return (pack && pack.loot) || [];
+  }
+
+  function layerLootAll() {
+    if (!layer) return [];
+    return allLoot().filter(function (p) {
+      return p.ui && p.layer === layer.id;
+    });
+  }
+
+  function layerLoot() {
+    return lootOn ? layerLootAll() : [];
+  }
+
+  function pointLabel(p) {
+    const name = (p && (p.name || (p.names && p.names[0]))) || "";
+    const kind = (p && p.type_zh) || "";
+    if (kind && kind !== name) return kind + "　" + name;
+    return name;
+  }
+
   function drawOverview() {
     if (!layer.overview) return;
     const img = loadImg(overviewUrl(layer.overview));
@@ -311,6 +335,16 @@
       ctx.arc(pt.x, pt.y, p === hit ? 7 : 4, 0, Math.PI * 2);
       ctx.fill();
     });
+    if (cam.s > 0.45) {
+      layerLoot().forEach(function (p) {
+        const pt = gameToCanvas(p.ui);
+        if (pt.x < -16 || pt.y < -16 || pt.x > box.width + 16 || pt.y > box.height + 16) return;
+        ctx.beginPath();
+        ctx.fillStyle = p.color || "#c13584";
+        ctx.arc(pt.x, pt.y, p === hit ? 6 : 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
     layerMarks().forEach(function (p) {
       const pt = gameToCanvas(p.ui);
       ctx.beginPath();
@@ -321,7 +355,7 @@
     const shown = markHit || hit;
     if (shown && shown.ui) {
       const pt = gameToCanvas(shown.ui);
-      hintEl.textContent = shown.name || (shown.names && shown.names[0]) || "";
+      hintEl.textContent = pointLabel(shown);
       ctx.fillStyle = "rgba(255,255,255,0.92)";
       ctx.font = "14px -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei', sans-serif";
       ctx.fillText(hintEl.textContent, pt.x + 10, pt.y - 8);
@@ -352,7 +386,7 @@
   function setLayer(id) {
     layer = (pack.index.layers || []).find(function (row) { return row.id === id; }) || pack.index.layers[0];
     Array.from(chipsEl.querySelectorAll(".mode-btn")).forEach(function (btn) {
-      btn.classList.toggle("is-on", btn.dataset.id === layer.id);
+      if (btn.dataset.id) btn.classList.toggle("is-on", btn.dataset.id === layer.id);
     });
     fitLayer();
     hit = null;
@@ -375,7 +409,7 @@
       markHit = null;
       hit = point;
     }
-    hintEl.textContent = point.name || "";
+    hintEl.textContent = pointLabel(point);
     draw();
   }
 
@@ -387,8 +421,8 @@
 
   function findPoint(qv) {
     if (!qv || !pack) return null;
-    const here = layerPoints().concat(layerMarks());
-    const all = (pack.points || []).concat(marks);
+    const here = layerPoints().concat(layerLootAll()).concat(layerMarks());
+    const all = (pack.points || []).concat(allLoot()).concat(marks);
     function hitName(p, exact) {
       if (!p.ui) return false;
       return namesOf(p).some(function (n) { return exact ? n === qv : n.indexOf(qv) >= 0; });
@@ -463,15 +497,27 @@
       } else {
         const own = nearestOf(layerMarks(), px, py);
         const official = nearestOf(layerPoints(), px, py);
-        if (own && (!official || own.d <= official.d)) {
+        const drop = nearestOf(layerLoot(), px, py);
+        if (own && (!official || own.d <= official.d) && (!drop || own.d <= drop.d)) {
           markHit = own.row;
           hit = null;
           hintEl.textContent = markHit.name || "";
           openMarkMenu(ev.clientX, ev.clientY);
+        } else if (official && (!drop || official.d <= drop.d + 6)) {
+          markHit = null;
+          hit = official.row;
+          hintEl.textContent = pointLabel(hit);
+          if (dungeonOf(hit)) openDungeonMenu(ev.clientX, ev.clientY, hit);
+          else closeMenu();
+        } else if (drop) {
+          markHit = null;
+          hit = drop.row;
+          hintEl.textContent = pointLabel(hit);
+          closeMenu();
         } else {
           markHit = null;
-          hit = official ? official.row : null;
-          hintEl.textContent = hit ? (hit.name || "") : (layer && layer.zh) || "";
+          hit = null;
+          hintEl.textContent = (layer && layer.zh) || "";
           closeMenu();
         }
         draw();
@@ -654,6 +700,67 @@
     draw();
   }
 
+  function dungeonOf(host) {
+    if (!pack || !pack.dungeons || !host) return null;
+    if (pack.dungeons[host.id] && (pack.dungeons[host.id].items || []).length) return pack.dungeons[host.id];
+    const name = host.name || "";
+    const rows = Object.keys(pack.dungeons);
+    for (let i = 0; i < rows.length; i++) {
+      const row = pack.dungeons[rows[i]];
+      if (row && row.name === name && (row.items || []).length) return row;
+    }
+    return null;
+  }
+
+  function openDungeonMenu(vx, vy, host) {
+    closeMenu();
+    if (!markMenu || !host) return;
+    const packRow = dungeonOf(host);
+    if (!packRow) return;
+    markMenu.innerHTML = "";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "settings-entry";
+    btn.dataset.job = "drops";
+    btn.appendChild(jobBadge(LIST));
+    const text = document.createElement("span");
+    text.textContent = "掉落物";
+    btn.appendChild(text);
+    btn.addEventListener("click", function () {
+      closeMenu();
+      openDungeonCard(packRow);
+    });
+    markMenu.appendChild(btn);
+    catcher.hidden = false;
+    document.body.appendChild(markMenu);
+    markMenu.hidden = false;
+    document.documentElement.classList.add("settings-open");
+    markMenu.style.left = Math.max(12, Math.min(window.innerWidth - 232, vx - 20)) + "px";
+    markMenu.style.right = "auto";
+    markMenu.style.top = Math.max(12, Math.min(window.innerHeight - 80, vy + 8)) + "px";
+  }
+
+  function openDungeonCard(packRow) {
+    const list = document.createElement("div");
+    list.className = "tag-row";
+    (packRow.items || []).forEach(function (item) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "tag-chip";
+      chip.textContent = item.name || "";
+      if (item.type_zh) chip.setAttribute("aria-label", item.type_zh + " " + (item.name || ""));
+      if (item.ui) {
+        chip.addEventListener("click", function () {
+          closeAct();
+          if (item.layer && layer && item.layer !== layer.id) setLayer(item.layer);
+          jumpTo(item);
+        });
+      }
+      list.appendChild(chip);
+    });
+    fillAct(packRow.name || "掉落物", [list]);
+  }
+
   function fillMenu() {
     menu.innerHTML = "";
     (pack && pack.index.layers || []).forEach(function (row) {
@@ -725,6 +832,16 @@
       btn.addEventListener("click", function () { setLayer(row.id); });
       chipsEl.appendChild(btn);
     });
+    const lootBtn = document.createElement("button");
+    lootBtn.type = "button";
+    lootBtn.className = "mode-btn is-on";
+    lootBtn.textContent = "道具";
+    lootBtn.addEventListener("click", function () {
+      lootOn = !lootOn;
+      lootBtn.classList.toggle("is-on", lootOn);
+      draw();
+    });
+    chipsEl.appendChild(lootBtn);
     penBtn = insButton("map-pen", HASH, "新增標記");
     penBtn.addEventListener("click", function (ev) {
       ev.preventDefault();
