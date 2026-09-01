@@ -18,12 +18,27 @@
 <link rel="apple-touch-icon" href="./icons/mark-180.png?v=1"/>
 <title>地圖</title>
 <script src="./config.js?v=1788270192"></script>
+<script>
+(function () {
+  var origin = window.VAULT_ORIGIN;
+  if (!origin) return;
+  var link = document.createElement("link");
+  link.rel = "preconnect";
+  link.href = origin;
+  link.crossOrigin = "anonymous";
+  document.head.appendChild(link);
+})();
+</script>
 <script src="./gate.js?v=2"></script>
-<link rel="stylesheet" href="./app.css?v=5"/>
+<link rel="stylesheet" href="./app.css?v=6"/>
 <link rel="stylesheet" href="./play.css?v=3"/>
-<link rel="stylesheet" href="./map.css?v=3"/>
+<link rel="stylesheet" href="./map.css?v=4"/>
 </head>
 <body class="famiWeb lightTheme">
+<div id="loaderContainer">
+  <div class="thinking-five" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+  <p class="read-wait">打開地圖</p>
+</div>
 <div id="topMenu" class="navMenu">
   <div class="navContainer">
     <button type="button" id="backShelf" class="ins-icon nav-back" aria-label="返回">
@@ -56,6 +71,6 @@
 </div>
 <div class="settings-catch" id="readerSettingsCatch" hidden></div>
 <script src="./mark.js?v=1"></script>
-<script src="./map.js?v=5"></script>
+<script src="./map.js?v=6"></script>
 </body>
 </html>

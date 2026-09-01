@@ -29,3 +29,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+body.famiWeb #loaderContainer {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  background: var(--void);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--accent);
+}
+body.famiWeb #loaderContainer.hidden {
+  display: none !important;
+}
+body.famiWeb #loaderContainer .thinking-five span {
+  background: var(--accent);
+}
+body.famiWeb .read-wait {
+  margin: 0;
+  color: var(--mute);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+}

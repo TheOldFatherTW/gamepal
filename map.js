@@ -20,6 +20,8 @@
   let drag = null;
   let pinch = null;
   let hit = null;
+  let drawQ = 0;
+  let announced = false;
 
   function embedded() {
     try { return window.parent && window.parent !== window; } catch (e) { return false; }
@@ -65,6 +67,26 @@
   function overviewUrl(file) {
     const name = String(file || "").split("/").pop();
     return origin() + "/map-overview?game=" + encodeURIComponent(gameId) + "&file=" + encodeURIComponent(name) + "&k=" + encodeURIComponent(key) + "&rev=" + encodeURIComponent(assetRev());
+  }
+
+  function requestDraw() {
+    if (drawQ) return;
+    drawQ = window.requestAnimationFrame(function () {
+      drawQ = 0;
+      draw();
+    });
+  }
+
+  function hideLoader() {
+    const el = document.getElementById("loaderContainer");
+    if (el) el.classList.add("hidden");
+  }
+
+  function announceReady() {
+    if (announced) return;
+    announced = true;
+    hideLoader();
+    try { window.parent.postMessage({ fami: "reader-ready" }, location.origin); } catch (e) {}
   }
 
   function loadImg(url) {
@@ -139,7 +161,7 @@
     if (!layer.overview) return;
     const img = loadImg(overviewUrl(layer.overview));
     if (!img.complete || !img.naturalWidth) {
-      img.onload = draw;
+      img.onload = requestDraw;
       return;
     }
     const scale = overviewScale();
@@ -166,7 +188,7 @@
         for (let y = y0; y <= y1; y++) {
           const img = loadImg(tileUrl(layer.map, 0, x, y));
           if (!img.complete || !img.naturalWidth) {
-            img.onload = draw;
+            img.onload = requestDraw;
             continue;
           }
           ctx.drawImage(img, x * tile * cam.s - cam.x, (h - (y + 1) * tile) * cam.s - cam.y, tile * cam.s, tile * cam.s);
@@ -186,6 +208,12 @@
       ctx.fillStyle = "rgba(255,255,255,0.92)";
       ctx.font = "14px -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei', sans-serif";
       ctx.fillText(hintEl.textContent, pt.x + 10, pt.y - 8);
+    }
+    if (layer.overview) {
+      const ov = loadImg(overviewUrl(layer.overview));
+      if (ov.complete && ov.naturalWidth) announceReady();
+    } else {
+      announceReady();
     }
   }
 
@@ -234,11 +262,15 @@
 
   function findPoint(qv) {
     if (!qv || !pack) return null;
-    return layerPoints().find(function (p) {
-      return namesOf(p).some(function (n) { return n.indexOf(qv) >= 0; });
-    }) || (pack.points || []).find(function (p) {
-      return p.ui && namesOf(p).some(function (n) { return n.indexOf(qv) >= 0; });
-    });
+    const all = pack.points || [];
+    function hitName(p, exact) {
+      if (!p.ui) return false;
+      return namesOf(p).some(function (n) { return exact ? n === qv : n.indexOf(qv) >= 0; });
+    }
+    return layerPoints().find(function (p) { return hitName(p, true); })
+      || all.find(function (p) { return hitName(p, true); })
+      || layerPoints().find(function (p) { return hitName(p, false); })
+      || all.find(function (p) { return hitName(p, false); });
   }
 
   function zoomAt(mx, my, next) {
@@ -384,9 +416,11 @@
   }
   if (catcher) catcher.addEventListener("click", closeMenu);
 
+  try { window.parent.postMessage({ fami: "reader-loading" }, location.origin); } catch (e) {}
   window.FamiGate.api("/api/map?game=" + encodeURIComponent(gameId), key, { timeout: 30000 }).then(function (x) {
     if (!x || !x.j || !x.j.ok) {
       hintEl.textContent = "地圖還沒好";
+      announceReady();
       return;
     }
     pack = x.j;

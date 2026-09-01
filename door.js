@@ -54,6 +54,7 @@
   let selectMode = false;
   let readerOpen = false;
   let readerStaySeq = 0;
+  let readerReadyTimer = 0;
   let askTarget = "";
   let askKind = "";
 
@@ -797,6 +798,16 @@
       try { frame.src = "about:blank"; } catch (e) {}
     }
     try { history.replaceState({}, "", cleanOverlayUrl()); } catch (e) {}
+    window.clearTimeout(readerReadyTimer);
+  }
+
+  function showReaderLive() {
+    const layer = document.getElementById("reader-layer");
+    if (!layer || !readerOpen) return;
+    layer.classList.add("is-live");
+    window.clearTimeout(readerReadyTimer);
+    const hint = document.getElementById("reader-hint");
+    if (hint) hint.hidden = true;
   }
 
   function openPlay(id, title) {
@@ -844,9 +855,8 @@
     if (wait) wait.textContent = "打開地圖";
     if (hint) hint.hidden = false;
     frame.src = href;
-    window.setTimeout(function () {
-      if (readerOpen) layer.classList.add("is-live");
-    }, 400);
+    window.clearTimeout(readerReadyTimer);
+    readerReadyTimer = window.setTimeout(showReaderLive, 15000);
   }
 
   function todoSub(item) {
@@ -1427,6 +1437,14 @@
   if (readerBack) readerBack.addEventListener("click", closeReader);
   window.addEventListener("message", function (ev) {
     if (ev.data && ev.data.gamepal === "close") closeReader();
+    const kind = ev.data && ev.data.fami;
+    if (kind === "reader-ready") showReaderLive();
+    else if (kind === "reader-loading" && readerOpen) {
+      const layer = document.getElementById("reader-layer");
+      if (layer) layer.classList.remove("is-live");
+      const hint = document.getElementById("reader-hint");
+      if (hint) hint.hidden = false;
+    }
   });
   window.addEventListener("popstate", function () {
     if (readerOpen) closeReader();
