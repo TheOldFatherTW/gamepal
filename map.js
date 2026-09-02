@@ -41,7 +41,10 @@
   let penBtn = null;
   let lootOn = true;
   let shown = {};
-  const PLACE_ZOOM = 0.8;
+  let doneIds = {};
+  let hideDone = false;
+  let pinHits = [];
+  const NAME_SPAN_TILES = 16;
   const NAME_FONT = "700 12px -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei', sans-serif";
   let drawQ = 0;
   let announced = false;
@@ -148,10 +151,70 @@
     if (c) lastColor = c;
   }
 
+  function applyProgress(j) {
+    if (!j) return;
+    if (Array.isArray(j.done)) {
+      doneIds = {};
+      j.done.forEach(function (id) {
+        if (id) doneIds[String(id)] = true;
+      });
+    }
+    if (j.hide_done != null) hideDone = !!j.hide_done;
+  }
+
+  async function saveProgress(body) {
+    const x = await window.FamiGate.api("/api/map-marks", key, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.assign({ op: "done", game: gameId }, body)),
+      timeout: 15000
+    });
+    if (x && x.j && x.j.ok) applyProgress(x.j);
+    return x;
+  }
+
+  async function toggleDone(p) {
+    const id = pointKey(p);
+    if (!id) return;
+    const on = !isDone(p);
+    if (on) doneIds[id] = true;
+    else delete doneIds[id];
+    draw();
+    const x = await saveProgress({ id: id, done: on });
+    if (!x || !x.j || !x.j.ok) {
+      if (on) delete doneIds[id];
+      else doneIds[id] = true;
+      draw();
+    }
+  }
+
+  function pointKey(p) {
+    return p && p.id ? String(p.id) : "";
+  }
+
+  function isDone(p) {
+    const id = pointKey(p);
+    return !!(id && doneIds[id]);
+  }
+
+  function isFacility(p) {
+    return !!(p && p.kind === "map-point");
+  }
+
+  function notHiddenDone(p) {
+    if (!hideDone || !isDone(p)) return true;
+    return p === hit || p === markHit;
+  }
+
+  function placeNamesOn() {
+    const box = canvas.getBoundingClientRect();
+    return box.width / cam.s <= NAME_SPAN_TILES * tileSize();
+  }
+
   function layerMarks() {
     if (!layer) return [];
     return marks.filter(function (p) {
-      return p.ui && p.layer === layer.id;
+      return p.ui && p.layer === layer.id && notHiddenDone(p);
     });
   }
 
@@ -303,7 +366,7 @@
   function layerPoints() {
     if (!pack || !layer) return [];
     return pack.points.filter(function (p) {
-      return p.ui && p.layer === layer.id && isShown(officialKey(p.kind));
+      return p.ui && p.layer === layer.id && isShown(officialKey(p.kind)) && notHiddenDone(p);
     });
   }
 
@@ -328,7 +391,7 @@
   function layerLoot() {
     if (!lootOn) return [];
     return layerLootAll().filter(function (p) {
-      return isShown(p.type_zh || p.kind || "drop");
+      return isShown(p.type_zh || p.kind || "drop") && notHiddenDone(p);
     });
   }
 
@@ -365,7 +428,9 @@
     ctx.font = NAME_FONT;
     ctx.textBaseline = "top";
     const padX = 7;
-    const padY = 3;
+    const padY = 5;
+    const mark = 22;
+    const gap = 6;
     const tw = ctx.measureText(text).width;
     const th = 12;
     const x = Math.round(pt.x + 10);
@@ -373,23 +438,54 @@
     return {
       x: x - padX,
       y: y - padY,
-      w: tw + padX * 2,
-      h: th + padY * 2,
-      tx: x,
-      ty: y
+      w: mark + gap + tw + padX * 2,
+      h: Math.max(th + padY * 2, 22),
+      tx: x + mark + gap,
+      ty: y,
+      mx: x + mark / 2,
+      my: y + th / 2
     };
+  }
+
+  function drawTodoMark(x, y, on) {
+    const r = 11;
+    ctx.beginPath();
+    if (on) {
+      ctx.fillStyle = "#34c759";
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(x - 5, y + 0.5);
+      ctx.lineTo(x - 1.5, y + 4);
+      ctx.lineTo(x + 5.5, y - 4);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = "#c7c7cc";
+      ctx.lineWidth = 1.6;
+      ctx.arc(x, y, r - 0.8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   function boxesOverlap(a, b) {
     return !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y);
   }
 
-  function drawNameTag(pt, text, used) {
+  function drawNameTag(pt, text, used, point) {
     if (!text) return null;
     const box = nameBox(pt, text);
     if (used && used.some(function (row) { return boxesOverlap(box, row); })) return null;
     ctx.fillStyle = "#000";
     ctx.fillRect(box.x, box.y, box.w, box.h);
+    if (point && pointKey(point)) {
+      drawTodoMark(box.mx, box.my, isDone(point));
+      pinHits.push({ p: point, kind: "check", x: box.mx - 14, y: box.my - 14, w: 28, h: 28 });
+      pinHits.push({ p: point, kind: "body", x: box.x, y: box.y, w: box.w, h: box.h });
+    }
     ctx.fillStyle = "#fff";
     ctx.font = NAME_FONT;
     ctx.textBaseline = "top";
@@ -422,12 +518,30 @@
     ctx.drawImage(img, -cam.x, (worldH() - gameH) * cam.s - cam.y, gameW * cam.s, gameH * cam.s);
   }
 
+  function drawPinCheck(p, pt) {
+    const x = Math.round(pt.x - 22);
+    const y = Math.round(pt.y);
+    drawTodoMark(x, y, isDone(p));
+    pinHits.push({ p: p, kind: "check", x: x - 14, y: y - 14, w: 28, h: 28 });
+  }
+
+  function hitPin(px, py, kind) {
+    for (let i = pinHits.length - 1; i >= 0; i--) {
+      const row = pinHits[i];
+      if (kind && row.kind !== kind) continue;
+      if (px >= row.x && py >= row.y && px <= row.x + row.w && py <= row.y + row.h) return row;
+    }
+    return null;
+  }
+
   function draw() {
     const box = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, box.width, box.height);
     if (!layer) return;
+    pinHits = [];
     const tile = layer.tile || 256;
     const h = (layer.y1 + 1) * tile;
+    const namesOn = placeNamesOn();
     drawOverview();
     if (cam.s > 0.45) {
       const a = canvasToGame(0, 0);
@@ -448,6 +562,7 @@
       }
     }
     layerPoints().forEach(function (p) {
+      if (isFacility(p)) return;
       const pt = gameToCanvas(p.ui);
       if (pt.x < -24 || pt.y < -24 || pt.x > box.width + 24 || pt.y > box.height + 24) return;
       drawPin(p, pt, p === hit);
@@ -465,20 +580,29 @@
       ctx.fill();
     });
     const tagged = [];
-    if (cam.s >= PLACE_ZOOM) {
+    const named = {};
+    if (namesOn) {
       layerPoints().forEach(function (p) {
-        if (p.kind === "grace") return;
+        if (!isFacility(p)) return;
         if (p === hit || p === markHit) return;
         const pt = gameToCanvas(p.ui);
         if (pt.x < 8 || pt.y < 8 || pt.x > box.width - 8 || pt.y > box.height - 8) return;
-        drawNameTag(pt, p.name || pointLabel(p), tagged);
+        if (drawNameTag(pt, p.name || pointLabel(p), tagged, p)) named[pointKey(p)] = true;
       });
     }
-    const shown = markHit || hit;
-    if (shown && shown.ui) {
-      const pt = gameToCanvas(shown.ui);
-      hintEl.textContent = pointLabel(shown);
-      drawNameTag(pt, hintEl.textContent, null);
+    const focus = markHit || hit;
+    if (focus && focus.ui) {
+      const pt = gameToCanvas(focus.ui);
+      hintEl.textContent = pointLabel(focus);
+      if (drawNameTag(pt, hintEl.textContent, null, focus)) named[pointKey(focus)] = true;
+    }
+    if (namesOn) {
+      layerPoints().concat(layerLoot()).concat(layerMarks()).forEach(function (p) {
+        if (isFacility(p) || !pointKey(p) || named[pointKey(p)]) return;
+        const pt = gameToCanvas(p.ui);
+        if (pt.x < 16 || pt.y < 16 || pt.x > box.width - 16 || pt.y > box.height - 16) return;
+        drawPinCheck(p, pt);
+      });
     }
     paintFilterTitle();
     if (layer.overview) {
@@ -616,31 +740,50 @@
         setPlacing(false);
         openMarkCard();
       } else {
-        const own = nearestOf(layerMarks(), px, py);
-        const official = nearestOf(layerPoints(), px, py);
-        const drop = nearestOf(layerLoot(), px, py);
-        if (own && (!official || own.d <= official.d) && (!drop || own.d <= drop.d)) {
-          markHit = own.row;
-          hit = null;
-          hintEl.textContent = markHit.name || "";
-          openMarkMenu(ev.clientX, ev.clientY);
-        } else if (official && (!drop || official.d <= drop.d + 6)) {
-          markHit = null;
-          hit = official.row;
-          hintEl.textContent = pointLabel(hit);
-          closeMenu();
-        } else if (drop) {
-          markHit = null;
-          hit = drop.row;
-          hintEl.textContent = pointLabel(hit);
-          closeMenu();
+        const check = hitPin(px, py, "check");
+        const label = hitPin(px, py, "body");
+        if (check && check.p) {
+          toggleDone(check.p);
+        } else if (label && label.p) {
+          if (isOwn(label.p)) {
+            markHit = label.p;
+            hit = null;
+            hintEl.textContent = markHit.name || "";
+            openMarkMenu(ev.clientX, ev.clientY);
+          } else {
+            markHit = null;
+            hit = label.p;
+            hintEl.textContent = pointLabel(hit);
+            closeMenu();
+          }
+          draw();
         } else {
-          markHit = null;
-          hit = null;
-          hintEl.textContent = (layer && layer.zh) || "";
-          closeMenu();
+          const own = nearestOf(layerMarks(), px, py);
+          const official = nearestOf(layerPoints().filter(function (p) { return !isFacility(p); }), px, py);
+          const drop = nearestOf(layerLoot(), px, py);
+          if (own && (!official || own.d <= official.d) && (!drop || own.d <= drop.d)) {
+            markHit = own.row;
+            hit = null;
+            hintEl.textContent = markHit.name || "";
+            openMarkMenu(ev.clientX, ev.clientY);
+          } else if (official && (!drop || official.d <= drop.d + 6)) {
+            markHit = null;
+            hit = official.row;
+            hintEl.textContent = pointLabel(hit);
+            closeMenu();
+          } else if (drop) {
+            markHit = null;
+            hit = drop.row;
+            hintEl.textContent = pointLabel(hit);
+            closeMenu();
+          } else {
+            markHit = null;
+            hit = null;
+            hintEl.textContent = (layer && layer.zh) || "";
+            closeMenu();
+          }
+          draw();
         }
-        draw();
       }
     }
     pointers.delete(ev.pointerId);
@@ -856,6 +999,27 @@
     });
   }
 
+  function switchHideDone() {
+    const row = document.createElement("label");
+    row.className = "ask-skip";
+    const text = document.createElement("span");
+    text.textContent = "隱藏已完成";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = hideDone;
+    const sw = document.createElement("span");
+    sw.className = "ask-sw";
+    input.addEventListener("change", function () {
+      hideDone = input.checked;
+      saveProgress({ hide_done: hideDone });
+      draw();
+    });
+    row.appendChild(text);
+    row.appendChild(input);
+    row.appendChild(sw);
+    return row;
+  }
+
   function switchRow(key, label) {
     const row = document.createElement("label");
     row.className = "ask-skip";
@@ -899,6 +1063,7 @@
     tools.appendChild(tool("全開", true));
     tools.appendChild(tool("全關", false));
     body.appendChild(tools);
+    body.appendChild(switchHideDone());
     const spec = filterSpec();
     const officialBox = document.createElement("div");
     officialBox.className = "filter-group";
@@ -1023,6 +1188,7 @@
     });
     chipsEl.appendChild(penBtn);
     applyMarks(pack);
+    applyProgress(pack);
     ensureShown();
     setLayer((pack.index.layers[0] || {}).id);
     if (wideMap()) openFilter();
