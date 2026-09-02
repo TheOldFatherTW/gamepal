@@ -389,8 +389,11 @@
 
   function layerPoints() {
     if (!pack || !layer) return [];
+    const hidingGrace = !!(focusLoot() && !hit && !markHit);
     return pack.points.filter(function (p) {
-      return p.ui && p.layer === layer.id && isShown(officialKey(p.kind)) && notHiddenDone(p);
+      if (!p.ui || p.layer !== layer.id || !isShown(officialKey(p.kind)) || !notHiddenDone(p)) return false;
+      if (hidingGrace && p.kind === "grace") return false;
+      return true;
     });
   }
 
