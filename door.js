@@ -675,7 +675,7 @@
     if (x.j && x.j.chats) rooms = x.j.chats.slice();
     const turns = (x.j && x.j.turns) || [];
     if (!turns.length) {
-      chatLine("跟我說你卡在哪。地圖、門、道具、敵人，需要圖我會貼給你。", "pal");
+      chatLine("我在。攻略冊跟地圖都在，想拿什麼或下一區直接講。", "pal");
     }
     turns.forEach(function (t) {
       if (t.q) chatLine(t.q, "me");
@@ -837,7 +837,7 @@
     const layer = document.getElementById("reader-layer");
     const frame = document.getElementById("reader-frame");
     if (!layer || !frame) {
-      location.href = "./play.html?id=" + encodeURIComponent(id) + "&k=" + encodeURIComponent(key) + "#k=" + encodeURIComponent(key);
+      location.href = "./play.html?v=2&id=" + encodeURIComponent(id) + "&k=" + encodeURIComponent(key) + "#k=" + encodeURIComponent(key);
       return;
     }
     document.documentElement.classList.add("is-reading");
@@ -846,7 +846,7 @@
     const wasOpen = readerOpen;
     readerOpen = true;
     if (!wasOpen) padOverlay();
-    frame.src = "./play.html?id=" + encodeURIComponent(id) + "&k=" + encodeURIComponent(key) + "#k=" + encodeURIComponent(key);
+    frame.src = "./play.html?v=2&id=" + encodeURIComponent(id) + "&k=" + encodeURIComponent(key) + "#k=" + encodeURIComponent(key);
     window.setTimeout(function () {
       if (readerOpen) layer.classList.add("is-live");
     }, 400);
