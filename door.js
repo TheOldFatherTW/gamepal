@@ -472,7 +472,7 @@
     } else {
       buttons.push(["todo", "待辦"]);
       rooms.forEach(function (room, i) {
-        buttons.push(["chat:" + room.id, "聊天" + (i + 1)]);
+        buttons.push(["chat:" + room.id, "紀錄" + (i + 1)]);
       });
       if (rooms.length < 3) buttons.push(["add-chat", "+"]);
     }
@@ -736,7 +736,7 @@
     chatBusy = true;
     if (input) input.value = "";
     chatLine(text, "me");
-    showLook("拍照中…", 8);
+    showLook("找攻略中…", 8);
     setLookRun(true);
     const from = paintedTurns;
     try {
@@ -839,7 +839,7 @@
     const gid = id || chatGame || openGame || "elden-ring";
     const layer = document.getElementById("reader-layer");
     const frame = document.getElementById("reader-frame");
-    const href = "./map.html?v=14&id=" + encodeURIComponent(gid) + "&k=" + encodeURIComponent(key) + "#k=" + encodeURIComponent(key);
+    const href = "./map.html?v=15&id=" + encodeURIComponent(gid) + "&chat=" + encodeURIComponent(chatId || "1") + "&k=" + encodeURIComponent(key) + "#k=" + encodeURIComponent(key);
     if (!layer || !frame) {
       location.href = href;
       return;
@@ -989,7 +989,7 @@
 
   async function openMemory() {
     const gid = firstGameId();
-    const x = await window.FamiGate.api("/api/memory?game=" + encodeURIComponent(gid), key, { timeout: 15000 });
+    const x = await window.FamiGate.api("/api/memory?" + chatQuery(), key, { timeout: 15000 });
     const facts = (x.j && x.j.facts) || [];
     const nodes = [];
     const p = document.createElement("p");
@@ -1029,11 +1029,11 @@
   }
 
   function askDeleteChat() {
-    showAsk("del-chat", chatId, "刪掉這個聊天? 對話不會進記憶。", true);
+    showAsk("del-chat", chatId, "刪掉這個紀錄? 地圖進度也會一起刪。", true);
   }
 
   function askArchiveChat() {
-    showAsk("archive", chatId, "把這個聊天收進記憶?", false);
+    showAsk("archive", chatId, "把這個紀錄的對話收進封存?", false);
   }
 
   function ensureChatGear() {

@@ -235,7 +235,7 @@
     busy = true;
     input.value = "";
     line(text, "me");
-    showLook("拍照中…", 8);
+    showLook("找攻略中…", 8);
     const from = paintedTurns;
     try {
       const x = await window.FamiGate.api("/api/chat", key, {

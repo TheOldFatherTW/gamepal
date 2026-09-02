@@ -2,9 +2,11 @@
   const q = new URLSearchParams(location.search);
   const key = window.FamiGate ? window.FamiGate.currentKey() : (q.get("k") || "");
   const gameId = q.get("id") || "elden-ring";
+  const recordId = q.get("chat") || "1";
   const titleEl = document.getElementById("bookTitle");
   const chipsEl = document.getElementById("mapChips");
   const findEl = document.getElementById("mapFind");
+  const hitsEl = document.getElementById("mapHits");
   const canvas = document.getElementById("mapCanvas");
   const hintEl = document.getElementById("mapHint");
   const menu = document.getElementById("readerSettingsMenu");
@@ -167,7 +169,7 @@
     const x = await window.FamiGate.api("/api/map-marks", key, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(Object.assign({ op: "done", game: gameId }, body)),
+      body: JSON.stringify(Object.assign({ op: "done", game: gameId, chat: recordId }, body)),
       timeout: 15000
     });
     if (x && x.j && x.j.ok) applyProgress(x.j);
@@ -660,18 +662,91 @@
     return rows;
   }
 
-  function findPoint(qv) {
-    if (!qv || !pack) return null;
-    const here = layerPointsAll().concat(layerLootAll()).concat(layerMarks());
-    const all = (pack.points || []).concat(allLoot()).concat(marks);
-    function hitName(p, exact) {
-      if (!p.ui) return false;
-      return namesOf(p).some(function (n) { return exact ? n === qv : n.indexOf(qv) >= 0; });
+  function foldName(s) {
+    const fw = "０１２３４５６７８９";
+    let out = String(s || "");
+    for (let i = 0; i < 10; i++) out = out.split(fw[i]).join(String(i));
+    return out.replace(/[「」『』 \t・．·\[\]【】]/g, "");
+  }
+
+  function nameScore(name, qv) {
+    const nf = foldName(name);
+    let qf = foldName(qv);
+    qf = qf.replace(/(?:在哪裡?|哪裡|位置|怎麼打|怎打|怎麼去|怎麼進|怎麼到|怎麼拿|呢|嗎|啊)+$/g, "");
+    if (!nf || !qf) return 0;
+    const qStem = qf.replace(/\d+$/, "");
+    const nStem = nf.replace(/\d+$/, "");
+    const qRank = (qf.match(/(\d+)$/) || [])[1] || "";
+    const nRank = (nf.match(/(\d+)$/) || [])[1] || "";
+    const at = String(qv).indexOf(name);
+    const after = at >= 0 ? String(qv).charAt(at + name.length) : "";
+    if ((at >= 0 && "0123456789０１２３４５６７８９".indexOf(after) < 0) || nf === qf) return 100;
+    if (qRank && nStem === qStem && nRank === qRank) return 95;
+    if (nf.length >= 2 && qf.indexOf(nf) >= 0) return 90;
+    if (nf.indexOf(qf) === 0 || nStem === qf) return 80;
+    if (nf.indexOf(qf) >= 0) return 50;
+    if (qStem.length >= 2 && nf.indexOf(qStem) >= 0) return 40;
+    return 0;
+  }
+
+  function allSearchPoints() {
+    return (pack.points || []).concat(allLoot()).concat(marks).filter(function (p) { return p && p.ui; });
+  }
+
+  function findHits(qv) {
+    if (!qv || !pack) return [];
+    const groups = {};
+    allSearchPoints().forEach(function (p) {
+      namesOf(p).forEach(function (n) {
+        const score = nameScore(n, qv);
+        if (!score) return;
+        const key = n;
+        if (!groups[key] || score > groups[key].score) {
+          groups[key] = { name: n, score: score, points: [] };
+        }
+      });
+    });
+    Object.keys(groups).forEach(function (key) {
+      groups[key].points = allSearchPoints().filter(function (p) {
+        return namesOf(p).indexOf(key) >= 0;
+      });
+    });
+    return Object.keys(groups).map(function (k) { return groups[k]; }).sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.name.localeCompare(b.name, "zh-Hant");
+    });
+  }
+
+  function pickHit(row) {
+    if (!row || !row.points || !row.points.length) return;
+    const here = row.points.find(function (p) { return layer && p.layer === layer.id; }) || row.points[0];
+    const key = here.type_zh || officialKey(here.kind);
+    if (key && shown[key] === false) {
+      shown[key] = true;
+      fillFilter();
     }
-    return here.find(function (p) { return hitName(p, true); })
-      || all.find(function (p) { return hitName(p, true); })
-      || here.find(function (p) { return hitName(p, false); })
-      || all.find(function (p) { return hitName(p, false); });
+    if (here.layer && layer && here.layer !== layer.id) setLayer(here.layer);
+    jumpTo(here);
+    const extra = row.points.length > 1 ? "　" + row.points.length + " 處" : "";
+    hintEl.textContent = (row.name || pointLabel(here)) + extra;
+  }
+
+  function paintHits(rows) {
+    if (!hitsEl) return;
+    hitsEl.innerHTML = "";
+    if (!rows || !rows.length) {
+      hitsEl.hidden = true;
+      return;
+    }
+    rows.slice(0, 24).forEach(function (row) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tag-chip";
+      btn.textContent = row.name + (row.points.length > 1 ? " " + row.points.length : "");
+      btn.addEventListener("click", function () { pickHit(row); });
+      hitsEl.appendChild(btn);
+    });
+    hitsEl.hidden = false;
   }
 
   function zoomAt(mx, my, next) {
@@ -802,22 +877,20 @@
     const qv = findEl.value.trim();
     if (!qv) {
       hit = null;
+      paintHits([]);
       hintEl.textContent = (layer && layer.zh) || "";
       draw();
       return;
     }
-    const hitRow = findPoint(qv);
-    if (hitRow) {
-      const key = hitRow.type_zh || officialKey(hitRow.kind);
-      if (key && shown[key] === false) {
-        shown[key] = true;
-        fillFilter();
-      }
-      if (hitRow.layer !== layer.id) setLayer(hitRow.layer);
-      jumpTo(hitRow);
-    } else {
+    const rows = findHits(qv);
+    if (!rows.length) {
+      paintHits([]);
       hintEl.textContent = "沒有這個名字";
+      return;
     }
+    paintHits(rows);
+    if (rows.length === 1) pickHit(rows[0]);
+    else hintEl.textContent = "匹配 " + rows.length + " 個名字";
   });
 
   function jobBadge(svg) {
@@ -1148,7 +1221,7 @@
   if (window.FamiGate && window.FamiGate.bindKeyboard) window.FamiGate.bindKeyboard();
 
   try { window.parent.postMessage({ fami: "reader-loading" }, location.origin); } catch (e) {}
-  window.FamiGate.api("/api/map?game=" + encodeURIComponent(gameId), key, { timeout: 30000 }).then(function (x) {
+  window.FamiGate.api("/api/map?game=" + encodeURIComponent(gameId) + "&chat=" + encodeURIComponent(recordId), key, { timeout: 30000 }).then(function (x) {
     if (!x || !x.j || !x.j.ok) {
       hintEl.textContent = "地圖還沒好";
       announceReady();

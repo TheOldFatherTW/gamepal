@@ -16,6 +16,17 @@
   flex: 0 0 40px;
 }
 .map-stage .apple-row { width: 100%; }
+.map-hits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 28vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.map-hits[hidden] {
+  display: none !important;
+}
 #mapCanvas {
   flex: 1;
   min-height: 0;
