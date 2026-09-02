@@ -110,6 +110,8 @@
     mask.classList.remove("is-dock");
     document.documentElement.classList.remove("tag-modal-open");
     syncFilterChip();
+    applyFocusView();
+    draw();
   }
 
   function openFilter() {
@@ -123,6 +125,8 @@
       document.documentElement.classList.add("tag-modal-open");
     }
     syncFilterChip();
+    applyFocusView();
+    draw();
   }
 
   function closeAsk() {
@@ -381,12 +385,46 @@
     cam.y = (worldH() - world.y1) * cam.s - (box.height - world.h * cam.s) / 2;
   }
 
-  function resize() {
+  function viewInset() {
     const box = canvas.getBoundingClientRect();
+    const mask = filterMask();
+    const dock = (wideMap() && mask && !mask.hidden && mask.classList.contains("is-dock"))
+      ? mask.getBoundingClientRect().width
+      : 0;
+    return { box: box, dock: dock, viewW: Math.max(80, box.width - dock) };
+  }
+
+  function syncCanvas() {
+    const host = canvas.parentElement;
     const ratio = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.floor(box.width * ratio));
-    canvas.height = Math.max(1, Math.floor(box.height * ratio));
+    const cssW = Math.max(1, host ? host.clientWidth : Math.floor(canvas.getBoundingClientRect().width));
+    const cssH = Math.max(1, host ? host.clientHeight : Math.floor(canvas.getBoundingClientRect().height));
+    const w = Math.max(1, Math.floor(cssW * ratio));
+    const h = Math.max(1, Math.floor(cssH * ratio));
+    const same = canvas.width === w && canvas.height === h;
+    if (!same) {
+      canvas.width = w;
+      canvas.height = h;
+    }
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return !same;
+  }
+
+  function applyFocusView() {
+    if (!focusSet || !focusSet.points || !focusSet.points.length) return;
+    const here = focusSet.i >= 0 ? focusSet.points[focusSet.i] : null;
+    if (here && here.ui && layer && here.layer === layer.id) {
+      const view = viewInset();
+      cam.x = here.ui.x * cam.s - (view.dock + view.viewW / 2);
+      cam.y = (worldH() - here.ui.y) * cam.s - view.box.height / 2;
+      return;
+    }
+    fitPoints(focusSet.points);
+  }
+
+  function resize() {
+    const changed = syncCanvas();
+    if (changed) applyFocusView();
     draw();
   }
 
@@ -400,7 +438,7 @@
 
   function layerPoints() {
     if (!pack || !layer) return [];
-    const hidingGrace = !!(focusLoot() && !hit && !markHit);
+    const hidingGrace = !!focusLoot();
     return pack.points.filter(function (p) {
       if (!p.ui || p.layer !== layer.id || !isShown(officialKey(p.kind)) || !notHiddenDone(p)) return false;
       if (hidingGrace && p.kind === "grace") return false;
@@ -590,6 +628,7 @@
   }
 
   function draw() {
+    syncCanvas();
     const box = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, box.width, box.height);
     if (!layer) return;
@@ -713,11 +752,11 @@
 
   function jumpTo(point) {
     if (!point || !point.ui) return;
-    const box = canvas.getBoundingClientRect();
+    const view = viewInset();
     cam.s = Math.max(cam.s, 0.8);
     const h = worldH();
-    cam.x = point.ui.x * cam.s - box.width / 2;
-    cam.y = (h - point.ui.y) * cam.s - box.height / 2;
+    cam.x = point.ui.x * cam.s - (view.dock + view.viewW / 2);
+    cam.y = (h - point.ui.y) * cam.s - view.box.height / 2;
     if (isOwn(point)) {
       markHit = point;
       hit = null;
@@ -821,7 +860,7 @@
       jumpTo(here[0]);
       return;
     }
-    const box = canvas.getBoundingClientRect();
+    const view = viewInset();
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
@@ -835,16 +874,11 @@
     const pad = Math.max(160, (maxX - minX) * 0.1, (maxY - minY) * 0.1);
     const w = Math.max(1, maxX - minX + pad * 2);
     const hgt = Math.max(1, maxY - minY + pad * 2);
-    const mask = filterMask();
-    const dock = (wideMap() && mask && !mask.hidden && mask.classList.contains("is-dock"))
-      ? mask.getBoundingClientRect().width
-      : 0;
-    const viewW = Math.max(80, box.width - dock);
-    cam.s = Math.min(1.4, Math.max(0.08, Math.min(viewW / w, box.height / hgt)));
+    cam.s = Math.min(1.4, Math.max(0.08, Math.min(view.viewW / w, view.box.height / hgt)));
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
-    cam.x = cx * cam.s - (dock + viewW / 2);
-    cam.y = (worldH() - cy) * cam.s - box.height / 2;
+    cam.x = cx * cam.s - (view.dock + view.viewW / 2);
+    cam.y = (worldH() - cy) * cam.s - view.box.height / 2;
     hit = null;
     markHit = null;
   }
@@ -909,6 +943,7 @@
     hitsEl.innerHTML = "";
     if (!rows || !rows.length) {
       hitsEl.hidden = true;
+      window.requestAnimationFrame(resize);
       return;
     }
     rows.slice(0, 24).forEach(function (row) {
@@ -924,6 +959,7 @@
       hitsEl.appendChild(btn);
     });
     hitsEl.hidden = false;
+    window.requestAnimationFrame(resize);
   }
 
   function zoomAt(mx, my, next) {
@@ -994,16 +1030,26 @@
         const check = hitPin(px, py, "check");
         const pin = hitPin(px, py, "pin");
         const label = hitPin(px, py, "body");
-        if (check && check.p) {
-          toggleDone(check.p);
-        } else if (pin && pin.p) {
-          selectPoint(pin.p);
-          if (isOwn(pin.p)) openMarkMenu(ev.clientX, ev.clientY);
-          else closeMenu();
-          draw();
-        } else if (label && label.p) {
-          selectPoint(label.p);
-          if (isOwn(label.p)) openMarkMenu(ev.clientX, ev.clientY);
+        const focused = (focusSet && focusSet.points || []).filter(function (p) {
+          return p && p.ui && layer && p.layer === layer.id;
+        });
+        const focusNear = focused.length ? nearestOf(focused, px, py, 40) : null;
+        const pick = (check && check.p)
+          ? { p: check.p, via: "check" }
+          : (pin && pin.p && focused.indexOf(pin.p) >= 0)
+            ? { p: pin.p, via: "pin" }
+            : (focusNear)
+              ? { p: focusNear.row, via: "pin" }
+              : (pin && pin.p)
+                ? { p: pin.p, via: "pin" }
+                : (label && label.p)
+                  ? { p: label.p, via: "body" }
+                  : null;
+        if (pick && pick.via === "check") {
+          toggleDone(pick.p);
+        } else if (pick && pick.p) {
+          selectPoint(pick.p);
+          if (isOwn(pick.p)) openMarkMenu(ev.clientX, ev.clientY);
           else closeMenu();
           draw();
         } else {
@@ -1446,6 +1492,25 @@
     setLayer((pack.index.layers[0] || {}).id);
     if (wideMap()) openFilter();
     resize();
+    if (window.ResizeObserver && canvas.parentElement) {
+      new ResizeObserver(function () { resize(); }).observe(canvas.parentElement);
+    }
+    window.__mapTest = function () {
+      const host = canvas.parentElement;
+      const box = canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      const here = focusSet && focusSet.i >= 0 ? focusSet.points[focusSet.i] : null;
+      const pt = here && here.ui ? gameToCanvas(here.ui) : null;
+      return {
+        bufW: canvas.width,
+        bufH: canvas.height,
+        wantW: Math.max(1, Math.floor((host ? host.clientWidth : box.width) * ratio)),
+        wantH: Math.max(1, Math.floor((host ? host.clientHeight : box.height) * ratio)),
+        pin: pt,
+        name: here ? pointLabel(here) : "",
+        box: { x: box.left, y: box.top, w: box.width, h: box.height }
+      };
+    };
   });
   window.addEventListener("resize", function () {
     const mask = filterMask();

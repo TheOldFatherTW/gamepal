@@ -36,12 +36,13 @@
   position: relative;
   flex: 1;
   min-height: 0;
-  display: flex;
 }
 #mapCanvas {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
+  height: 100%;
   border-radius: 16px;
   background: #1c2228;
   touch-action: none;
