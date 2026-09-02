@@ -46,6 +46,8 @@
   let doneIds = {};
   let hideDone = false;
   let pinHits = [];
+  let focusSet = null;
+  let hitRows = [];
   const NAME_SPAN_TILES = 16;
   const MARK_SCALE = 0.75;
   const NAME_FONT = "700 12px -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei', sans-serif";
@@ -89,12 +91,23 @@
     return window.matchMedia("(min-width: 900px)").matches;
   }
 
+  function filterChip() {
+    return chipsEl ? chipsEl.querySelector(".mode-find") : null;
+  }
+
+  function syncFilterChip() {
+    const btn = filterChip();
+    const mask = filterMask();
+    if (btn) btn.classList.toggle("is-on", !!(mask && !mask.hidden));
+  }
+
   function closeFilter() {
     const mask = filterMask();
     if (!mask) return;
     mask.hidden = true;
     mask.classList.remove("is-dock");
     document.documentElement.classList.remove("tag-modal-open");
+    syncFilterChip();
   }
 
   function openFilter() {
@@ -107,6 +120,7 @@
       mask.classList.remove("is-dock");
       document.documentElement.classList.add("tag-modal-open");
     }
+    syncFilterChip();
   }
 
   function closeAsk() {
@@ -398,9 +412,21 @@
     });
   }
 
+  function focusLoot() {
+    if (!focusSet || !focusSet.points) return null;
+    const rows = focusSet.points.filter(function (p) {
+      return p && p.ui && (p.kind === "drop" || p.type_zh);
+    });
+    return rows.length ? rows : null;
+  }
+
   function layerLoot() {
     if (!lootOn) return [];
-    return layerLootAll().filter(function (p) {
+    const focused = focusLoot();
+    const rows = focused
+      ? focused.filter(function (p) { return layer && p.layer === layer.id; })
+      : layerLootAll();
+    return rows.filter(function (p) {
       return isShown(p.type_zh || p.kind || "drop") && notHiddenDone(p);
     });
   }
@@ -599,8 +625,14 @@
     const focus = markHit || hit;
     if (focus && focus.ui) {
       const pt = gameToCanvas(focus.ui);
+      drawNameTag(pt, pointLabel(focus), null, focus);
+    }
+    if (focusSet) {
+      paintFocusHint(focus && focusSet.points && focusSet.points.indexOf(focus) >= 0 ? focus : null);
+    } else if (focus && focus.ui) {
       hintEl.textContent = pointLabel(focus);
-      drawNameTag(pt, hintEl.textContent, null, focus);
+    } else if (!placing) {
+      hintEl.textContent = (layer && layer.zh) || "";
     }
     paintFilterTitle();
     if (layer.overview) {
@@ -669,10 +701,20 @@
     return out.replace(/[「」『』 \t・．·\[\]【】]/g, "");
   }
 
+  function queryFold(qv) {
+    return foldName(qv).replace(/(?:在哪裡?|哪裡|位置|怎麼打|怎打|怎麼去|怎麼進|怎麼到|怎麼拿|呢|嗎|啊)+$/g, "");
+  }
+
+  function exactHit(rows, qv) {
+    const qf = queryFold(qv);
+    if (!qf) return null;
+    const hits = (rows || []).filter(function (row) { return foldName(row.name) === qf; });
+    return hits.length === 1 ? hits[0] : null;
+  }
+
   function nameScore(name, qv) {
     const nf = foldName(name);
-    let qf = foldName(qv);
-    qf = qf.replace(/(?:在哪裡?|哪裡|位置|怎麼打|怎打|怎麼去|怎麼進|怎麼到|怎麼拿|呢|嗎|啊)+$/g, "");
+    const qf = queryFold(qv);
     if (!nf || !qf) return 0;
     const qStem = qf.replace(/\d+$/, "");
     const nStem = nf.replace(/\d+$/, "");
@@ -717,22 +759,112 @@
     });
   }
 
+  function sortNamedPoints(points) {
+    const order = ((pack && pack.index && pack.index.layers) || []).map(function (row) { return row.id; });
+    return points.slice().sort(function (a, b) {
+      const la = order.indexOf(a.layer);
+      const lb = order.indexOf(b.layer);
+      if (la !== lb) return (la < 0 ? 99 : la) - (lb < 0 ? 99 : lb);
+      if (!a.ui || !b.ui) return 0;
+      if (b.ui.y !== a.ui.y) return b.ui.y - a.ui.y;
+      return a.ui.x - b.ui.x;
+    });
+  }
+
+  function fitPoints(points) {
+    const here = (points || []).filter(function (p) {
+      return p && p.ui && layer && p.layer === layer.id;
+    });
+    if (!here.length) return;
+    if (here.length === 1) {
+      jumpTo(here[0]);
+      return;
+    }
+    const box = canvas.getBoundingClientRect();
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    here.forEach(function (p) {
+      minX = Math.min(minX, p.ui.x);
+      maxX = Math.max(maxX, p.ui.x);
+      minY = Math.min(minY, p.ui.y);
+      maxY = Math.max(maxY, p.ui.y);
+    });
+    const pad = Math.max(160, (maxX - minX) * 0.1, (maxY - minY) * 0.1);
+    const w = Math.max(1, maxX - minX + pad * 2);
+    const hgt = Math.max(1, maxY - minY + pad * 2);
+    const mask = filterMask();
+    const dock = (wideMap() && mask && !mask.hidden && mask.classList.contains("is-dock"))
+      ? mask.getBoundingClientRect().width
+      : 0;
+    const viewW = Math.max(80, box.width - dock);
+    cam.s = Math.min(1.4, Math.max(0.08, Math.min(viewW / w, box.height / hgt)));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    cam.x = cx * cam.s - (dock + viewW / 2);
+    cam.y = (worldH() - cy) * cam.s - box.height / 2;
+    hit = null;
+    markHit = null;
+  }
+
+  function paintFocusHint(point) {
+    if (!focusSet || !focusSet.points || !focusSet.points.length) return;
+    const n = focusSet.points.length;
+    const hereN = focusSet.points.filter(function (p) { return layer && p.layer === layer.id; }).length;
+    const name = focusSet.name;
+    if (point && n > 1) {
+      const i = focusSet.points.indexOf(point);
+      if (i >= 0) {
+        hintEl.textContent = name + "　" + (i + 1) + "／" + n;
+        return;
+      }
+    }
+    if (n === 1) {
+      hintEl.textContent = name;
+      return;
+    }
+    if (hereN < n) {
+      hintEl.textContent = name + "　" + ((layer && layer.zh) || "本圖") + hereN + "／共" + n + "處";
+      return;
+    }
+    hintEl.textContent = name + "　共" + n + "處";
+  }
+
   function pickHit(row) {
     if (!row || !row.points || !row.points.length) return;
-    const here = row.points.find(function (p) { return layer && p.layer === layer.id; }) || row.points[0];
-    const key = here.type_zh || officialKey(here.kind);
+    const points = sortNamedPoints(row.points);
+    const same = !!(focusSet && focusSet.name === row.name);
+    const key = points[0].type_zh || officialKey(points[0].kind);
     if (key && shown[key] === false) {
       shown[key] = true;
       fillFilter();
     }
-    if (here.layer && layer && here.layer !== layer.id) setLayer(here.layer);
-    jumpTo(here);
-    const extra = row.points.length > 1 ? "　" + row.points.length + " 處" : "";
-    hintEl.textContent = (row.name || pointLabel(here)) + extra;
+    if (same && points.length > 1) {
+      focusSet.points = points;
+      focusSet.i = (focusSet.i + 1 + points.length) % points.length;
+      const here = points[focusSet.i];
+      if (here.layer && layer && here.layer !== layer.id) setLayer(here.layer);
+      jumpTo(here);
+      paintHits(hitRows);
+      return;
+    }
+    focusSet = { name: row.name, points: points, i: -1 };
+    const onLayer = points.filter(function (p) { return layer && p.layer === layer.id; });
+    if (!onLayer.length && points[0].layer) setLayer(points[0].layer);
+    if (points.length === 1) {
+      focusSet.i = 0;
+      jumpTo(points[0]);
+    } else {
+      fitPoints(points);
+      draw();
+    }
+    paintHits(hitRows);
   }
 
   function paintHits(rows) {
     if (!hitsEl) return;
+    hitRows = rows || [];
     hitsEl.innerHTML = "";
     if (!rows || !rows.length) {
       hitsEl.hidden = true;
@@ -741,8 +873,12 @@
     rows.slice(0, 24).forEach(function (row) {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "tag-chip";
-      btn.textContent = row.name + (row.points.length > 1 ? " " + row.points.length : "");
+      btn.className = "tag-chip" + (focusSet && focusSet.name === row.name ? " is-on" : "");
+      if (focusSet && focusSet.name === row.name && focusSet.i >= 0 && row.points.length > 1) {
+        btn.textContent = row.name + "　" + (focusSet.i + 1) + "／" + row.points.length;
+      } else {
+        btn.textContent = row.name + (row.points.length > 1 ? "　" + row.points.length + "處" : "");
+      }
       btn.addEventListener("click", function () { pickHit(row); });
       hitsEl.appendChild(btn);
     });
@@ -876,6 +1012,7 @@
   findEl.addEventListener("input", function () {
     const qv = findEl.value.trim();
     if (!qv) {
+      focusSet = null;
       hit = null;
       paintHits([]);
       hintEl.textContent = (layer && layer.zh) || "";
@@ -884,13 +1021,21 @@
     }
     const rows = findHits(qv);
     if (!rows.length) {
+      focusSet = null;
       paintHits([]);
       hintEl.textContent = "沒有這個名字";
       return;
     }
+    if (focusSet && !rows.some(function (row) { return row.name === focusSet.name; })) {
+      focusSet = null;
+    }
     paintHits(rows);
-    if (rows.length === 1) pickHit(rows[0]);
-    else hintEl.textContent = "匹配 " + rows.length + " 個名字";
+    const auto = rows.length === 1 ? rows[0] : exactHit(rows, qv);
+    if (auto) {
+      if (!focusSet || focusSet.name !== auto.name) pickHit(auto);
+    } else if (!focusSet) {
+      hintEl.textContent = "匹配 " + rows.length + " 個名字";
+    }
   });
 
   function jobBadge(svg) {
@@ -1241,7 +1386,7 @@
     });
     const filterBtn = document.createElement("button");
     filterBtn.type = "button";
-    filterBtn.className = "mode-btn mode-find is-on";
+    filterBtn.className = "mode-btn mode-find";
     filterBtn.textContent = "篩選";
     filterBtn.addEventListener("click", function () {
       const mask = filterMask();

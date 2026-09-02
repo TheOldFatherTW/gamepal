@@ -27,6 +27,17 @@
 .map-hits[hidden] {
   display: none !important;
 }
+.map-hits button.tag-chip.is-on {
+  background: linear-gradient(120deg, #fa7e1e 0%, #d62976 48%, #962fbf 100%);
+  border-color: transparent;
+  color: #fff;
+}
+.map-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
 #mapCanvas {
   flex: 1;
   min-height: 0;
@@ -75,7 +86,7 @@
   }
   .map-stage .batch-tag-mask.list-tag-mask.is-dock {
     position: absolute;
-    inset: 88px auto 52px 0;
+    inset: 8px auto 8px 0;
     width: min(280px, 36vw);
     align-items: stretch;
     justify-content: flex-start;
