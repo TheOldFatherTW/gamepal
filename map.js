@@ -41,6 +41,8 @@
   let penBtn = null;
   let lootOn = true;
   let shown = {};
+  const PLACE_ZOOM = 0.8;
+  const NAME_FONT = "700 12px -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei', sans-serif";
   let drawQ = 0;
   let announced = false;
 
@@ -336,7 +338,7 @@
   }
 
   function drawIcon(p, pt, big) {
-    const size = big ? 26 : 20;
+    const size = p.kind === "grace" ? (big ? 32 : 24) : (big ? 26 : 20);
     const url = iconUrl(p.icon);
     if (url) {
       const img = loadImg(url);
@@ -347,7 +349,7 @@
       img.onload = requestDraw;
     }
     ctx.beginPath();
-    ctx.fillStyle = p.color || "#c13584";
+    ctx.fillStyle = p.color || (p.kind === "grace" ? "#e8c56b" : "#c13584");
     ctx.arc(pt.x, pt.y, big ? 6 : 4, 0, Math.PI * 2);
     ctx.fill();
   }
@@ -357,6 +359,54 @@
     const kind = (p && p.type_zh) || "";
     if (kind && kind !== name) return kind + "　" + name;
     return name;
+  }
+
+  function nameBox(pt, text) {
+    ctx.font = NAME_FONT;
+    ctx.textBaseline = "top";
+    const padX = 7;
+    const padY = 3;
+    const tw = ctx.measureText(text).width;
+    const th = 12;
+    const x = Math.round(pt.x + 10);
+    const y = Math.round(pt.y - 8 - th);
+    return {
+      x: x - padX,
+      y: y - padY,
+      w: tw + padX * 2,
+      h: th + padY * 2,
+      tx: x,
+      ty: y
+    };
+  }
+
+  function boxesOverlap(a, b) {
+    return !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y);
+  }
+
+  function drawNameTag(pt, text, used) {
+    if (!text) return null;
+    const box = nameBox(pt, text);
+    if (used && used.some(function (row) { return boxesOverlap(box, row); })) return null;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(box.x, box.y, box.w, box.h);
+    ctx.fillStyle = "#fff";
+    ctx.font = NAME_FONT;
+    ctx.textBaseline = "top";
+    ctx.fillText(text, box.tx, box.ty);
+    if (used) used.push(box);
+    return box;
+  }
+
+  function drawPin(p, pt, big) {
+    if (p.icon) {
+      drawIcon(p, pt, big);
+      return;
+    }
+    ctx.beginPath();
+    ctx.fillStyle = p.color || (p.kind === "grace" ? "#e8c56b" : "#c13584");
+    ctx.arc(pt.x, pt.y, big ? 7 : 4, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   function drawOverview() {
@@ -399,10 +449,8 @@
     }
     layerPoints().forEach(function (p) {
       const pt = gameToCanvas(p.ui);
-      ctx.beginPath();
-      ctx.fillStyle = p.kind === "grace" ? "#e8c56b" : "#c13584";
-      ctx.arc(pt.x, pt.y, p === hit ? 7 : 4, 0, Math.PI * 2);
-      ctx.fill();
+      if (pt.x < -24 || pt.y < -24 || pt.x > box.width + 24 || pt.y > box.height + 24) return;
+      drawPin(p, pt, p === hit);
     });
     layerLoot().forEach(function (p) {
       const pt = gameToCanvas(p.ui);
@@ -416,13 +464,21 @@
       ctx.arc(pt.x, pt.y, p === markHit ? 8 : 6, 0, Math.PI * 2);
       ctx.fill();
     });
+    const tagged = [];
+    if (cam.s >= PLACE_ZOOM) {
+      layerPoints().forEach(function (p) {
+        if (p.kind === "grace") return;
+        if (p === hit || p === markHit) return;
+        const pt = gameToCanvas(p.ui);
+        if (pt.x < 8 || pt.y < 8 || pt.x > box.width - 8 || pt.y > box.height - 8) return;
+        drawNameTag(pt, p.name || pointLabel(p), tagged);
+      });
+    }
     const shown = markHit || hit;
     if (shown && shown.ui) {
       const pt = gameToCanvas(shown.ui);
       hintEl.textContent = pointLabel(shown);
-      ctx.fillStyle = "rgba(255,255,255,0.92)";
-      ctx.font = "14px -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei', sans-serif";
-      ctx.fillText(hintEl.textContent, pt.x + 10, pt.y - 8);
+      drawNameTag(pt, hintEl.textContent, null);
     }
     paintFilterTitle();
     if (layer.overview) {
