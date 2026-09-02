@@ -839,7 +839,7 @@
     const gid = id || chatGame || openGame || "elden-ring";
     const layer = document.getElementById("reader-layer");
     const frame = document.getElementById("reader-frame");
-    const href = "./map.html?v=6&id=" + encodeURIComponent(gid) + "&k=" + encodeURIComponent(key) + "#k=" + encodeURIComponent(key);
+    const href = "./map.html?v=14&id=" + encodeURIComponent(gid) + "&k=" + encodeURIComponent(key) + "#k=" + encodeURIComponent(key);
     if (!layer || !frame) {
       location.href = href;
       return;
