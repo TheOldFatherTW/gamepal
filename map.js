@@ -45,6 +45,7 @@
   let hideDone = false;
   let pinHits = [];
   const NAME_SPAN_TILES = 16;
+  const MARK_SCALE = 0.75;
   const NAME_FONT = "700 12px -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei', sans-serif";
   let drawQ = 0;
   let announced = false;
@@ -174,6 +175,7 @@
   }
 
   async function toggleDone(p) {
+    if (!canCheck(p)) return;
     const id = pointKey(p);
     if (!id) return;
     const on = !isDone(p);
@@ -201,8 +203,14 @@
     return !!(p && p.kind === "map-point");
   }
 
+  function canCheck(p) {
+    if (!p || !pointKey(p)) return false;
+    if (p.kind === "grace" || p.kind === "map-point") return false;
+    return true;
+  }
+
   function notHiddenDone(p) {
-    if (!hideDone || !isDone(p)) return true;
+    if (!canCheck(p) || !hideDone || !isDone(p)) return true;
     return p === hit || p === markHit;
   }
 
@@ -424,13 +432,13 @@
     return name;
   }
 
-  function nameBox(pt, text) {
+  function nameBox(pt, text, withCheck) {
     ctx.font = NAME_FONT;
     ctx.textBaseline = "top";
     const padX = 7;
-    const padY = 5;
-    const mark = 22;
-    const gap = 6;
+    const padY = withCheck ? 5 : 3;
+    const mark = withCheck ? 22 * MARK_SCALE : 0;
+    const gap = withCheck ? 6 * MARK_SCALE : 0;
     const tw = ctx.measureText(text).width;
     const th = 12;
     const x = Math.round(pt.x + 10);
@@ -439,7 +447,7 @@
       x: x - padX,
       y: y - padY,
       w: mark + gap + tw + padX * 2,
-      h: Math.max(th + padY * 2, 22),
+      h: Math.max(th + padY * 2, withCheck ? 22 * MARK_SCALE : th + padY * 2),
       tx: x + mark + gap,
       ty: y,
       mx: x + mark / 2,
@@ -448,25 +456,25 @@
   }
 
   function drawTodoMark(x, y, on) {
-    const r = 11;
+    const r = 11 * MARK_SCALE;
     ctx.beginPath();
     if (on) {
       ctx.fillStyle = "#34c759";
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = 2.2 * MARK_SCALE;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.beginPath();
-      ctx.moveTo(x - 5, y + 0.5);
-      ctx.lineTo(x - 1.5, y + 4);
-      ctx.lineTo(x + 5.5, y - 4);
+      ctx.moveTo(x - 5 * MARK_SCALE, y + 0.5 * MARK_SCALE);
+      ctx.lineTo(x - 1.5 * MARK_SCALE, y + 4 * MARK_SCALE);
+      ctx.lineTo(x + 5.5 * MARK_SCALE, y - 4 * MARK_SCALE);
       ctx.stroke();
     } else {
       ctx.strokeStyle = "#c7c7cc";
-      ctx.lineWidth = 1.6;
-      ctx.arc(x, y, r - 0.8, 0, Math.PI * 2);
+      ctx.lineWidth = 1.6 * MARK_SCALE;
+      ctx.arc(x, y, r - 0.8 * MARK_SCALE, 0, Math.PI * 2);
       ctx.stroke();
     }
   }
@@ -477,13 +485,17 @@
 
   function drawNameTag(pt, text, used, point) {
     if (!text) return null;
-    const box = nameBox(pt, text);
+    const showCheck = !!(point && canCheck(point) && (point === hit || point === markHit));
+    const box = nameBox(pt, text, showCheck);
     if (used && used.some(function (row) { return boxesOverlap(box, row); })) return null;
     ctx.fillStyle = "#000";
     ctx.fillRect(box.x, box.y, box.w, box.h);
-    if (point && pointKey(point)) {
+    if (showCheck) {
+      const hitR = 14 * MARK_SCALE;
       drawTodoMark(box.mx, box.my, isDone(point));
-      pinHits.push({ p: point, kind: "check", x: box.mx - 14, y: box.my - 14, w: 28, h: 28 });
+      pinHits.push({ p: point, kind: "check", x: box.mx - hitR, y: box.my - hitR, w: hitR * 2, h: hitR * 2 });
+    }
+    if (point) {
       pinHits.push({ p: point, kind: "body", x: box.x, y: box.y, w: box.w, h: box.h });
     }
     ctx.fillStyle = "#fff";
@@ -516,13 +528,6 @@
     const gameW = img.naturalWidth * scale;
     const gameH = img.naturalHeight * scale;
     ctx.drawImage(img, -cam.x, (worldH() - gameH) * cam.s - cam.y, gameW * cam.s, gameH * cam.s);
-  }
-
-  function drawPinCheck(p, pt) {
-    const x = Math.round(pt.x - 22);
-    const y = Math.round(pt.y);
-    drawTodoMark(x, y, isDone(p));
-    pinHits.push({ p: p, kind: "check", x: x - 14, y: y - 14, w: 28, h: 28 });
   }
 
   function hitPin(px, py, kind) {
@@ -580,29 +585,20 @@
       ctx.fill();
     });
     const tagged = [];
-    const named = {};
     if (namesOn) {
       layerPoints().forEach(function (p) {
         if (!isFacility(p)) return;
         if (p === hit || p === markHit) return;
         const pt = gameToCanvas(p.ui);
         if (pt.x < 8 || pt.y < 8 || pt.x > box.width - 8 || pt.y > box.height - 8) return;
-        if (drawNameTag(pt, p.name || pointLabel(p), tagged, p)) named[pointKey(p)] = true;
+        drawNameTag(pt, p.name || pointLabel(p), tagged, p);
       });
     }
     const focus = markHit || hit;
     if (focus && focus.ui) {
       const pt = gameToCanvas(focus.ui);
       hintEl.textContent = pointLabel(focus);
-      if (drawNameTag(pt, hintEl.textContent, null, focus)) named[pointKey(focus)] = true;
-    }
-    if (namesOn) {
-      layerPoints().concat(layerLoot()).concat(layerMarks()).forEach(function (p) {
-        if (isFacility(p) || !pointKey(p) || named[pointKey(p)]) return;
-        const pt = gameToCanvas(p.ui);
-        if (pt.x < 16 || pt.y < 16 || pt.x > box.width - 16 || pt.y > box.height - 16) return;
-        drawPinCheck(p, pt);
-      });
+      drawNameTag(pt, hintEl.textContent, null, focus);
     }
     paintFilterTitle();
     if (layer.overview) {
