@@ -138,6 +138,29 @@
     if (mask) mask.hidden = true;
   }
 
+  function setWaitPct(n) {
+    const pct = document.getElementById("waitPct");
+    if (pct) pct.textContent = String(n) + "%";
+  }
+
+  function postFile(url, body, onPct) {
+    return new Promise(function (resolve, reject) {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 300) resolve(xhr);
+        else reject(new Error("fail"));
+      };
+      xhr.onerror = function () { reject(new Error("net")); };
+      if (xhr.upload) {
+        xhr.upload.onprogress = function (ev) {
+          if (ev.lengthComputable && ev.total && onPct) onPct(Math.round((ev.loaded / ev.total) * 100));
+        };
+      }
+      xhr.send(body);
+    });
+  }
+
   function closeSettings() {
     document.querySelectorAll(".settings-menu").forEach(function (menu) { menu.hidden = true; });
     if (settingsCatch) settingsCatch.hidden = true;
@@ -261,7 +284,7 @@
   }
 
   function thumbUrl(item) {
-    return window.FamiGate.origin() + "/thumb?id=" + encodeURIComponent(item.id) + "&k=" + encodeURIComponent(key);
+    return window.FamiGate.origin() + "/thumb?id=" + encodeURIComponent(item.id) + "&k=" + encodeURIComponent(key) + "&r=" + (item.cover_rev || 0);
   }
 
   function showRail(on) {
@@ -839,7 +862,7 @@
     const gid = id || chatGame || openGame || "elden-ring";
     const layer = document.getElementById("reader-layer");
     const frame = document.getElementById("reader-frame");
-    const href = "./map.html?v=17&id=" + encodeURIComponent(gid) + "&chat=" + encodeURIComponent(chatId || "1") + "&k=" + encodeURIComponent(key) + "#k=" + encodeURIComponent(key);
+    const href = "./map.html?v=18&id=" + encodeURIComponent(gid) + "&chat=" + encodeURIComponent(chatId || "1") + "&k=" + encodeURIComponent(key) + "#k=" + encodeURIComponent(key);
     if (!layer || !frame) {
       location.href = href;
       return;
@@ -1418,13 +1441,18 @@
     const btn = document.querySelector(".rail-cover");
     if (btn) btn.classList.add("is-run");
     showWaitCard("更換封面中");
+    const ids = Array.from(selected);
     try {
-      const ids = Array.from(selected);
       for (let i = 0; i < ids.length; i++) {
         const fd = new FormData();
         fd.append("cover", file, file.name || "cover.jpg");
-        await fetch(window.FamiGate.origin() + "/api/game-cover?id=" + encodeURIComponent(ids[i]) + "&k=" + encodeURIComponent(key), { method: "POST", body: fd });
+        await postFile(
+          window.FamiGate.origin() + "/api/game-cover?id=" + encodeURIComponent(ids[i]) + "&k=" + encodeURIComponent(key),
+          fd,
+          setWaitPct
+        );
       }
+      setWaitPct(100);
     } finally {
       hideWaitCard();
       if (btn) btn.classList.remove("is-run");

@@ -52,6 +52,8 @@
   const MARK_SCALE = 0.75;
   const NAME_FONT = "700 12px -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei', sans-serif";
   let drawQ = 0;
+  let zoomLive = 0;
+  let zoomWait = 0;
   let announced = false;
 
   function embedded() {
@@ -306,6 +308,15 @@
     });
   }
 
+  function noteZoom() {
+    zoomLive = 1;
+    window.clearTimeout(zoomWait);
+    zoomWait = window.setTimeout(function () {
+      zoomLive = 0;
+      requestDraw();
+    }, 140);
+  }
+
   function hideLoader() {
     const el = document.getElementById("loaderContainer");
     if (el) el.classList.add("hidden");
@@ -439,6 +450,11 @@
     return origin() + "/map-icon?game=" + encodeURIComponent(gameId) + "&file=" + encodeURIComponent(file) + "&k=" + encodeURIComponent(key) + "&rev=" + encodeURIComponent(assetRev());
   }
 
+  function markPin(p, pt, size) {
+    const hitR = Math.max(size, 28);
+    pinHits.push({ p: p, kind: "pin", x: pt.x - hitR / 2, y: pt.y - hitR / 2, w: hitR, h: hitR });
+  }
+
   function drawIcon(p, pt, big) {
     const size = p.kind === "grace" ? (big ? 32 : 24) : (big ? 26 : 20);
     const url = iconUrl(p.icon);
@@ -446,6 +462,7 @@
       const img = loadImg(url);
       if (img.complete && img.naturalWidth) {
         ctx.drawImage(img, pt.x - size / 2, pt.y - size / 2, size, size);
+        markPin(p, pt, size);
         return;
       }
       img.onload = requestDraw;
@@ -454,6 +471,7 @@
     ctx.fillStyle = p.color || (p.kind === "grace" ? "#e8c56b" : "#c13584");
     ctx.arc(pt.x, pt.y, big ? 6 : 4, 0, Math.PI * 2);
     ctx.fill();
+    markPin(p, pt, size);
   }
 
   function pointLabel(p) {
@@ -546,6 +564,7 @@
     ctx.fillStyle = p.color || (p.kind === "grace" ? "#e8c56b" : "#c13584");
     ctx.arc(pt.x, pt.y, big ? 7 : 4, 0, Math.PI * 2);
     ctx.fill();
+    markPin(p, pt, big ? 28 : 24);
   }
 
   function drawOverview() {
@@ -579,7 +598,7 @@
     const h = (layer.y1 + 1) * tile;
     const namesOn = placeNamesOn();
     drawOverview();
-    if (cam.s > 0.45) {
+    if (cam.s > 0.45 && !zoomLive) {
       const a = canvasToGame(0, 0);
       const b = canvasToGame(box.width, box.height);
       const x0 = Math.max(layer.x0, Math.floor(Math.min(a.x, b.x) / tile) - 1);
@@ -614,6 +633,7 @@
       ctx.fillStyle = p.color || lastColor;
       ctx.arc(pt.x, pt.y, p === markHit ? 8 : 6, 0, Math.PI * 2);
       ctx.fill();
+      markPin(p, pt, 28);
     });
     const tagged = [];
     if (namesOn) {
@@ -646,9 +666,27 @@
     }
   }
 
-  function nearestOf(rows, px, py) {
+  function selectPoint(p) {
+    if (!p) return;
+    if (isOwn(p)) {
+      markHit = p;
+      hit = null;
+    } else {
+      markHit = null;
+      hit = p;
+    }
+    if (focusSet && focusSet.points) {
+      const i = focusSet.points.indexOf(p);
+      if (i >= 0) {
+        focusSet.i = i;
+        paintHits(hitRows);
+      }
+    }
+  }
+
+  function nearestOf(rows, px, py, reach) {
     let best = null;
-    let bestD = 22;
+    let bestD = reach || 22;
     rows.forEach(function (p) {
       if (!p.ui) return;
       const pt = gameToCanvas(p.ui);
@@ -924,12 +962,15 @@
       const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       const mx = (pts[0].x + pts[1].x) / 2;
       const my = (pts[0].y + pts[1].y) / 2;
-      if (pinch.d > 8) zoomAt(mx, my, pinch.s * (d / pinch.d));
+      if (pinch.d > 8) {
+        zoomAt(mx, my, pinch.s * (d / pinch.d));
+        noteZoom();
+      }
       cam.x += pinch.mx - mx;
       cam.y += pinch.my - my;
       pinch.mx = mx;
       pinch.my = my;
-      draw();
+      requestDraw();
       return;
     }
     if (!drag) return;
@@ -938,7 +979,7 @@
     if (Math.hypot(dx, dy) > 4) drag.moved = true;
     cam.x = drag.cx - dx;
     cam.y = drag.cy - dy;
-    draw();
+    requestDraw();
   });
   canvas.addEventListener("pointerup", function (ev) {
     const box = canvas.getBoundingClientRect();
@@ -951,45 +992,39 @@
         openMarkCard();
       } else {
         const check = hitPin(px, py, "check");
+        const pin = hitPin(px, py, "pin");
         const label = hitPin(px, py, "body");
         if (check && check.p) {
           toggleDone(check.p);
+        } else if (pin && pin.p) {
+          selectPoint(pin.p);
+          if (isOwn(pin.p)) openMarkMenu(ev.clientX, ev.clientY);
+          else closeMenu();
+          draw();
         } else if (label && label.p) {
-          if (isOwn(label.p)) {
-            markHit = label.p;
-            hit = null;
-            hintEl.textContent = markHit.name || "";
-            openMarkMenu(ev.clientX, ev.clientY);
-          } else {
-            markHit = null;
-            hit = label.p;
-            hintEl.textContent = pointLabel(hit);
-            closeMenu();
-          }
+          selectPoint(label.p);
+          if (isOwn(label.p)) openMarkMenu(ev.clientX, ev.clientY);
+          else closeMenu();
           draw();
         } else {
           const own = nearestOf(layerMarks(), px, py);
           const official = nearestOf(layerPoints().filter(function (p) { return !isFacility(p); }), px, py);
-          const drop = nearestOf(layerLoot(), px, py);
+          const drop = nearestOf(layerLoot(), px, py, focusSet ? 32 : 22);
           if (own && (!official || own.d <= official.d) && (!drop || own.d <= drop.d)) {
-            markHit = own.row;
-            hit = null;
-            hintEl.textContent = markHit.name || "";
+            selectPoint(own.row);
             openMarkMenu(ev.clientX, ev.clientY);
+          } else if (focusSet && drop) {
+            selectPoint(drop.row);
+            closeMenu();
           } else if (official && (!drop || official.d <= drop.d + 6)) {
-            markHit = null;
-            hit = official.row;
-            hintEl.textContent = pointLabel(hit);
+            selectPoint(official.row);
             closeMenu();
           } else if (drop) {
-            markHit = null;
-            hit = drop.row;
-            hintEl.textContent = pointLabel(hit);
+            selectPoint(drop.row);
             closeMenu();
           } else {
             markHit = null;
             hit = null;
-            hintEl.textContent = (layer && layer.zh) || "";
             closeMenu();
           }
           draw();
@@ -1009,7 +1044,8 @@
     ev.preventDefault();
     const box = canvas.getBoundingClientRect();
     zoomAt(ev.clientX - box.left, ev.clientY - box.top, cam.s * (ev.deltaY > 0 ? 0.9 : 1.1));
-    draw();
+    noteZoom();
+    requestDraw();
   }, { passive: false });
 
   findEl.addEventListener("input", function () {
