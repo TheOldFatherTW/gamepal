@@ -15,6 +15,8 @@
   let busy = false;
   let paintedTurns = 0;
   let lookSeq = 0;
+  let chatStick = true;
+  let chatPinning = false;
 
   function embedded() {
     try { return window.parent && window.parent !== window; } catch (e) { return false; }
@@ -58,6 +60,52 @@
     });
   }
 
+  function chatNearEnd(box) {
+    return box.scrollHeight - box.scrollTop - box.clientHeight < 96;
+  }
+
+  function bindChatLog() {
+    if (!logEl || logEl.dataset.chatBound) return;
+    logEl.dataset.chatBound = "1";
+    logEl.addEventListener("scroll", function () {
+      if (chatPinning) return;
+      chatStick = chatNearEnd(logEl);
+    }, { passive: true });
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () {
+        if (chatStick && !chatPinning) pinChat(false);
+      }).observe(logEl);
+    }
+  }
+
+  function pinChat(force) {
+    if (!logEl) return;
+    bindChatLog();
+    if (force) chatStick = true;
+    if (!force && !chatStick) return;
+    chatPinning = true;
+    function go() {
+      const last = logEl.lastElementChild;
+      if (last) {
+        const view = logEl.getBoundingClientRect();
+        const end = last.getBoundingClientRect().bottom;
+        const delta = end - (view.bottom - 12);
+        if (Math.abs(delta) > 1) logEl.scrollTop += delta;
+      } else {
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+    }
+    go();
+    requestAnimationFrame(function () {
+      go();
+      requestAnimationFrame(function () {
+        go();
+        chatPinning = false;
+        if (chatNearEnd(logEl)) chatStick = true;
+      });
+    });
+  }
+
   function line(text, who, images, kind) {
     const wrap = document.createElement("div");
     wrap.className = "play-line is-" + who + (kind ? " is-" + kind : "");
@@ -73,7 +121,10 @@
       img.className = "play-shot";
       img.alt = im.caption || "";
       img.src = imgUrl(im.id);
-      img.addEventListener("load", function () { img.classList.add("is-on"); });
+      img.addEventListener("load", function () {
+        img.classList.add("is-on");
+        pinChat(false);
+      });
       bubble.appendChild(img);
       if (im.caption) {
         const cap = document.createElement("span");
@@ -84,7 +135,7 @@
     });
     wrap.appendChild(bubble);
     logEl.appendChild(wrap);
-    logEl.scrollTop = logEl.scrollHeight;
+    pinChat(who === "me" || busy);
     return wrap;
   }
 
@@ -125,11 +176,13 @@
     waitEl.hidden = false;
     waitEl.setAttribute("aria-label", text);
     if (window.PalMark) window.PalMark.mountBar(waitBar);
+    pinChat(false);
   }
 
   function hideLook() {
     scrubJobBubbles();
     waitEl.hidden = true;
+    pinChat(false);
   }
 
   function sleep(ms) {
@@ -282,6 +335,7 @@
       showLook(job.phase || "找攻略中…", job.progress);
       watchLook(job.q || "", paintedTurns);
     }
+    pinChat(true);
   }).catch(function () {});
 
   document.getElementById("backShelf").addEventListener("click", goBack);

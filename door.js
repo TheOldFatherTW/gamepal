@@ -46,6 +46,8 @@
   let paintedTurns = 0;
   let lookLive = 0;
   let lookSeq = 0;
+  let chatStick = true;
+  let chatPinning = false;
   let ready = false;
   let booting = false;
   let bootTimer = 0;
@@ -599,9 +601,62 @@
     });
   }
 
+  function chatLogEl() {
+    return document.getElementById("playLog");
+  }
+
+  function chatNearEnd(logEl) {
+    return logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 96;
+  }
+
+  function bindChatLog() {
+    const logEl = chatLogEl();
+    if (!logEl || logEl.dataset.chatBound) return;
+    logEl.dataset.chatBound = "1";
+    logEl.addEventListener("scroll", function () {
+      if (chatPinning) return;
+      chatStick = chatNearEnd(logEl);
+    }, { passive: true });
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () {
+        if (chatStick && !chatPinning) pinChat(false);
+      }).observe(logEl);
+    }
+  }
+
+  function pinChat(force) {
+    const logEl = chatLogEl();
+    if (!logEl) return;
+    bindChatLog();
+    if (force) chatStick = true;
+    if (!force && !chatStick) return;
+    chatPinning = true;
+    function go() {
+      const last = logEl.lastElementChild;
+      if (last) {
+        const view = logEl.getBoundingClientRect();
+        const end = last.getBoundingClientRect().bottom;
+        const delta = end - (view.bottom - 12);
+        if (Math.abs(delta) > 1) logEl.scrollTop += delta;
+      } else {
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+    }
+    go();
+    requestAnimationFrame(function () {
+      go();
+      requestAnimationFrame(function () {
+        go();
+        chatPinning = false;
+        if (chatNearEnd(logEl)) chatStick = true;
+      });
+    });
+  }
+
   function chatLine(text, who, images, kind) {
-    const logEl = document.getElementById("playLog");
+    const logEl = chatLogEl();
     if (!logEl) return null;
+    bindChatLog();
     const wrap = document.createElement("div");
     wrap.className = "play-line is-" + who + (kind ? " is-" + kind : "");
     const bubble = document.createElement("div");
@@ -616,7 +671,10 @@
       img.className = "play-shot";
       img.alt = im.caption || "";
       img.src = chatImgUrl(im.id);
-      img.addEventListener("load", function () { img.classList.add("is-on"); });
+      img.addEventListener("load", function () {
+        img.classList.add("is-on");
+        pinChat(false);
+      });
       bubble.appendChild(img);
       if (im.caption) {
         const cap = document.createElement("span");
@@ -627,7 +685,7 @@
     });
     wrap.appendChild(bubble);
     logEl.appendChild(wrap);
-    logEl.scrollTop = logEl.scrollHeight;
+    pinChat(who === "me" || lookLive > 0);
     return wrap;
   }
 
@@ -673,12 +731,14 @@
       waitEl.setAttribute("aria-label", text);
     }
     if (window.PalMark && waitBar) window.PalMark.mountBar(waitBar);
+    pinChat(false);
   }
 
   function hideLook() {
     const waitEl = document.getElementById("playWait");
     scrubJobBubbles();
     if (waitEl) waitEl.hidden = true;
+    pinChat(false);
   }
 
   function chatQuery() {
@@ -706,6 +766,7 @@
       setLookRun(true);
       watchLook(job.q || "", paintedTurns);
     }
+    pinChat(true);
   }
 
   function setLookRun(on) {

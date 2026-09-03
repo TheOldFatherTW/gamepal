@@ -118,12 +118,15 @@ html.is-chat body {
   gap: 8px;
   flex: 1;
   min-height: 0;
+  position: relative;
   overflow: auto;
+  overflow-anchor: none;
   -webkit-overflow-scrolling: touch;
   padding: 8px 2px 12px;
 }
 .play-line {
   display: flex;
+  flex: 0 0 auto;
   max-width: 82%;
   margin: 0;
   font-size: 16px;
