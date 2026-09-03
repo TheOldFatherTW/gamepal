@@ -713,10 +713,9 @@
 
   async function watchLook(q, from) {
     const seq = ++lookSeq;
-    const start = Date.now();
     let misses = 0;
     try {
-      while (Date.now() - start < 210000) {
+      while (true) {
         if (seq !== lookSeq) return;
         try {
           const x = await window.FamiGate.api("/api/memory?" + chatQuery(), key, { timeout: 20000 });
