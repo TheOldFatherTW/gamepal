@@ -148,19 +148,31 @@
     return String(a || "").trim() === String(b || "").trim();
   }
 
-  function lookReady(job, turns, from, q) {
+  function lookReady(job, turns, q) {
     const list = turns || [];
-    const fresh = list.slice(from);
-    const hit = q
-      ? fresh.some(function (t) { return t && t.a && sameQ(t.q, q); })
-      : fresh.some(function (t) { return t && t.a; });
-    if (hit) return true;
+    if (q && list.some(function (t) { return t && t.a && sameQ(t.q, q); })) return true;
     if (job.state === "failed" && (!job.q || !q || sameQ(job.q, q))) return true;
-    if (q && job.q && sameQ(job.q, q) && job.state === "done" && list.length > from) {
-      const last = list[list.length - 1];
-      if (last && last.a && sameQ(last.q, q)) return true;
-    }
+    if (job.state === "done" && q && sameQ(job.q, q)) return true;
     return false;
+  }
+
+  function paintFresh(turns, q) {
+    const list = turns || [];
+    if (q) {
+      for (let i = list.length - 1; i >= 0; i--) {
+        const t = list[i];
+        if (t && (t.a || (t.images && t.images.length)) && sameQ(t.q, q)) {
+          line(t.a || "", "pal", t.images);
+          paintedTurns = list.length;
+          return;
+        }
+      }
+    }
+    for (let i = paintedTurns; i < list.length; i++) {
+      const t = list[i];
+      if (t && (t.a || (t.images && t.images.length))) line(t.a || "", "pal", t.images);
+    }
+    paintedTurns = list.length;
   }
 
   function scrubJobBubbles() {
@@ -189,7 +201,7 @@
     return new Promise(function (resolve) { window.setTimeout(resolve, ms); });
   }
 
-  async function watchLook(q, from) {
+  async function watchLook(q) {
     const seq = ++lookSeq;
     let misses = 0;
     try {
@@ -204,17 +216,9 @@
           if (job.state === "running") {
             showLook(job.phase || "找攻略中…", job.progress);
           }
-          if (lookReady(job, turns, from, q)) {
+          if (lookReady(job, turns, q)) {
             hideLook();
-            if (paintedTurns >= turns.length) {
-              paintedTurns = turns.length;
-              return;
-            }
-            for (let i = from; i < turns.length; i++) {
-              const t = turns[i];
-              if (t && (t.a || (t.images && t.images.length))) line(t.a || "", "pal", t.images);
-            }
-            paintedTurns = turns.length;
+            paintFresh(turns, q);
             return;
           }
         } catch (err) {
@@ -288,7 +292,6 @@
     input.value = "";
     line(text, "me");
     showLook("找攻略中…", 8);
-    const from = paintedTurns;
     try {
       const x = await window.FamiGate.api("/api/chat", key, {
         method: "POST",
@@ -299,7 +302,7 @@
       if (x.j && x.j.pending) {
         const job = x.j.job || {};
         showLook(job.phase || "找攻略中…", job.progress == null ? 28 : job.progress);
-        watchLook(text, from);
+        watchLook(text);
         return;
       }
       const reply = (x.j && x.j.reply) || (x.j && x.j.error) || "這回合沒問到";
@@ -333,7 +336,7 @@
     const job = (x.j && x.j.job) || {};
     if (job.state === "running") {
       showLook(job.phase || "找攻略中…", job.progress);
-      watchLook(job.q || "", paintedTurns);
+      watchLook(job.q || "");
     }
     pinChat(true);
   }).catch(function () {});
