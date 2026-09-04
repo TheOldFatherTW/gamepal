@@ -1,1 +1,1 @@
-window.VAULT_ORIGIN = "https://modems-lodging-country-dark.trycloudflare.com";
+window.VAULT_ORIGIN = "https://formal-backup-getting-forecast.trycloudflare.com";
