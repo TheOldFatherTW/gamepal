@@ -1,1 +1,1 @@
-window.VAULT_ORIGIN = "https://cent-libs-orientation-willow.trycloudflare.com";
+window.VAULT_ORIGIN = "https://modems-lodging-country-dark.trycloudflare.com";
