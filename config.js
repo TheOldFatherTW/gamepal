@@ -1,1 +1,1 @@
-window.VAULT_ORIGIN = "https://formal-backup-getting-forecast.trycloudflare.com";
+window.VAULT_ORIGIN = "https://castle-expires-kansas-birds.trycloudflare.com";
