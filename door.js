@@ -1141,11 +1141,10 @@
     input.className = "tag-search-input";
     input.placeholder = videoApplied.length ? "再找？" : "找影片？";
     const go = document.createElement("button");
-    go.type = "submit";
+    go.type = "button";
     go.className = "tag-apply";
     go.innerHTML = '<span class="tag-apply-face">尋找這些影片</span>';
     form.appendChild(input);
-    form.appendChild(go);
     const suggest = document.createElement("div");
     suggest.className = "tag-picker-suggest";
     body.appendChild(chosen);
@@ -1153,6 +1152,7 @@
     body.appendChild(suggest);
     card.appendChild(head);
     card.appendChild(body);
+    card.appendChild(go);
     mask.appendChild(card);
     document.body.appendChild(mask);
     videoFindSheet = mask;
@@ -1223,15 +1223,19 @@
       input.placeholder = "輸入文字尋找";
       refreshSuggest();
     });
-    form.addEventListener("submit", function (ev) {
-      ev.preventDefault();
+    function applyFind() {
       const q = String(input.value || "").trim();
       if (q) addTok(q);
       videoApplied = videoPicked.slice();
       closeVideoFind();
       paintModes();
       loadVideos();
+    }
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      applyFind();
     });
+    go.addEventListener("click", applyFind);
     paintChosen();
     refreshSuggest();
     try { input.focus(); } catch (e) {}
@@ -1344,9 +1348,12 @@
     const nodes = [];
     const form = document.createElement("form");
     form.className = "tag-picker-form";
-    form.innerHTML = '<input class="tag-search-input" id="todoAdd" maxlength="80" placeholder="新的待辦"/><button type="submit" class="tag-apply"><span class="tag-apply-face">確認</span></button>';
-    form.addEventListener("submit", async function (e) {
-      e.preventDefault();
+    form.innerHTML = '<input class="tag-search-input" id="todoAdd" maxlength="80" placeholder="新的待辦"/>';
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "tag-apply";
+    go.innerHTML = '<span class="tag-apply-face">確認</span>';
+    async function addTodo() {
       const input = document.getElementById("todoAdd");
       const title = (input && input.value || "").trim();
       if (!title) return;
@@ -1359,8 +1366,14 @@
       openQueue();
       if (hostTab === "todo") loadShelf();
       else if (openGame) loadShelf();
+    }
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      addTodo();
     });
+    go.addEventListener("click", addTodo);
     nodes.push(form);
+    nodes.push(go);
     const job = (x.j && x.j.job) || {};
     if (job.state === "running" && job.phase) {
       const run = document.createElement("p");
@@ -1479,9 +1492,12 @@
   function openNewGame() {
     const form = document.createElement("form");
     form.className = "tag-picker-form";
-    form.innerHTML = '<input class="tag-search-input" id="gameAdd" maxlength="40" placeholder="遊戲名"/><button type="submit" class="tag-apply"><span class="tag-apply-face">確認</span></button>';
-    form.addEventListener("submit", async function (e) {
-      e.preventDefault();
+    form.innerHTML = '<input class="tag-search-input" id="gameAdd" maxlength="40" placeholder="遊戲名"/>';
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "tag-apply";
+    go.innerHTML = '<span class="tag-apply-face">確認</span>';
+    async function addGame() {
       const input = document.getElementById("gameAdd");
       const title = ((input && input.value) || "").trim();
       if (!title) return;
@@ -1493,8 +1509,13 @@
       });
       closeAct();
       loadShelf();
+    }
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      addGame();
     });
-    fillAct("新遊戲", [form]);
+    go.addEventListener("click", addGame);
+    fillAct("新遊戲", [form, go]);
   }
 
   async function addChatRoom() {

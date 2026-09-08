@@ -397,17 +397,17 @@
     input.className = "tag-search-input";
     input.placeholder = "找段落？";
     var go = document.createElement("button");
-    go.type = "submit";
+    go.type = "button";
     go.className = "tag-apply";
     go.innerHTML = '<span class="tag-apply-face">看這一段</span>';
     form.appendChild(input);
-    form.appendChild(go);
     var suggest = document.createElement("div");
     suggest.className = "tag-picker-suggest";
     body.appendChild(form);
     body.appendChild(suggest);
     card.appendChild(head);
     card.appendChild(body);
+    card.appendChild(go);
     mask.appendChild(card);
     document.body.appendChild(mask);
     chapterSheet = mask;
@@ -449,11 +449,15 @@
     }
 
     input.addEventListener("input", paintSuggest);
-    form.addEventListener("submit", function (ev) {
-      ev.preventDefault();
+    function applyChapter() {
       var tags = visibleTags();
       if (tags.length) jumpTo(tags[0].start);
+    }
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      applyChapter();
     });
+    go.addEventListener("click", applyChapter);
     paintSuggest();
   }
 
