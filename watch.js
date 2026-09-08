@@ -244,10 +244,12 @@
   if (titleEl) titleEl.textContent = "";
   if (player) player.poster = coverUrl();
 
-  if (window.FamiGate) {
-    window.FamiGate.blockWebChrome();
-    window.FamiGate.bindKeyboard();
+  function bindWatchChrome() {
+    var gate = window.FamiGate || window.YRoomGate;
+    if (gate && gate.blockWebChrome) gate.blockWebChrome();
+    if (gate && gate.bindKeyboard) gate.bindKeyboard();
   }
+  bindWatchChrome();
 
   mediaReady = fetch(withKey("/api/video?video=" + encodeURIComponent(videoId)))
     .then(function (r) { return r.json(); })

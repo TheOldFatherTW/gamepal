@@ -105,6 +105,11 @@
       focused.scrollIntoView({ block: "nearest" });
     }
     vv.addEventListener("resize", apply);
+    window.addEventListener("orientationchange", function () {
+      apply();
+      setTimeout(apply, 160);
+      setTimeout(apply, 480);
+    });
     window.addEventListener("focusin", function () {
       apply();
       window.requestAnimationFrame(function () {
