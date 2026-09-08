@@ -27,6 +27,7 @@
   var holdUntil = 0;
   var restoring = false;
   var recoveries = 0;
+  var userArmed = 0;
   var appleTouch = /iP(hone|od|ad)/.test(navigator.userAgent || "")
     || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   if (appleTouch) document.documentElement.classList.add("is-ios");
@@ -41,10 +42,10 @@
     return withKey("/media.mp4?video=" + encodeURIComponent(videoId));
   }
   function playlistUrl() {
-    return withKey("/media.m3u8?video=" + encodeURIComponent(videoId) + "&hv=d2");
+    return withKey("/media.m3u8?video=" + encodeURIComponent(videoId) + "&hv=d3");
   }
   function segmentUrl(index) {
-    return withKey("/media-seg.ts?video=" + encodeURIComponent(videoId) + "&i=" + index + "&hv=d2");
+    return withKey("/media-seg.ts?video=" + encodeURIComponent(videoId) + "&i=" + index + "&hv=d3");
   }
   function coverUrl() {
     return withKey("/cover?video=" + encodeURIComponent(videoId));
@@ -94,22 +95,29 @@
   function isSnapBack(t) {
     return wanted > 8 && t < 2 && (Date.now() - userSeekAt) < 4000 && Math.abs(t - lastSeekT) > 8;
   }
+  function userIsScrubbing() {
+    return (Date.now() - userArmed) < 2500;
+  }
   function onUserSeek() {
     if (!player || restoring) return;
+    clearTimeout(prefetchTimer);
+    prefetchTimer = setTimeout(function () {
+      prefetchAt(player.currentTime);
+    }, 80);
+    if (!userIsScrubbing()) return;
     var t = player.currentTime || 0;
     if (Date.now() < holdUntil || isSnapBack(t)) {
       restoreWanted();
       return;
     }
     markWanted(t);
-    clearTimeout(prefetchTimer);
-    prefetchTimer = setTimeout(function () {
-      prefetchAt(player.currentTime);
-    }, 80);
   }
   function bindSeekPrefetch() {
     if (!player || player.dataset.prefetchOn) return;
     player.dataset.prefetchOn = "1";
+    ["pointerdown", "mousedown", "touchstart"].forEach(function (ev) {
+      player.addEventListener(ev, function () { userArmed = Date.now(); });
+    });
     player.addEventListener("seeking", onUserSeek);
     player.addEventListener("seeked", onUserSeek);
   }
@@ -266,7 +274,7 @@
     });
     player.addEventListener("timeupdate", function () {
       var t = player.currentTime || 0;
-      if (isSnapBack(t)) {
+      if (userIsScrubbing() && isSnapBack(t)) {
         restoreWanted();
         return;
       }
