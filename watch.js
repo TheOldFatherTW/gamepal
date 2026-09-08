@@ -12,7 +12,10 @@
   var menu = document.getElementById("readerSettingsMenu");
   var catcher = document.getElementById("readerSettingsCatch");
   var gear = document.getElementById("configButton");
+  var chapterEntry = document.getElementById("chapterEntry");
   var endMask = document.getElementById("endMask");
+  var chapterTags = [];
+  var chapterSheet = null;
   var duration = 0;
   var segmentSec = 4;
   var lastSave = 0;
@@ -241,12 +244,19 @@
   if (titleEl) titleEl.textContent = "";
   if (player) player.poster = coverUrl();
 
+  if (window.FamiGate) {
+    window.FamiGate.blockWebChrome();
+    window.FamiGate.bindKeyboard();
+  }
+
   mediaReady = fetch(withKey("/api/video?video=" + encodeURIComponent(videoId)))
     .then(function (r) { return r.json(); })
     .then(function (info) {
       if (titleEl) titleEl.textContent = (info && info.title) || "";
       duration = Number(info && info.duration) || 0;
       segmentSec = Number(info && info.segment) || 4;
+      chapterTags = Array.isArray(info && info.tags) ? info.tags : [];
+      if (chapterEntry) chapterEntry.hidden = !chapterTags.length;
       return fetch(withKey("/api/prefs?video=" + encodeURIComponent(videoId))).then(function (r) { return r.json(); });
     })
     .then(function (prefs) {
@@ -301,9 +311,17 @@
   document.getElementById("backShelf").addEventListener("click", closeWatch);
   document.getElementById("backToShelf").addEventListener("click", closeWatch);
 
+  function placeMenu() {
+    if (!menu || !gear) return;
+    var box = gear.getBoundingClientRect();
+    menu.style.position = "fixed";
+    menu.style.right = Math.max(12, window.innerWidth - box.right) + "px";
+    menu.style.top = Math.round(box.bottom + 8) + "px";
+  }
   function closeMenu() {
     if (menu) menu.hidden = true;
     if (catcher) catcher.hidden = true;
+    document.documentElement.classList.remove("settings-open");
     if (gear) {
       gear.setAttribute("aria-expanded", "false");
       gear.classList.remove("is-live");
@@ -311,7 +329,12 @@
   }
   function openMenu() {
     if (catcher) catcher.hidden = false;
-    if (menu) menu.hidden = false;
+    if (menu) {
+      document.body.appendChild(menu);
+      menu.hidden = false;
+      placeMenu();
+    }
+    document.documentElement.classList.add("settings-open");
     if (gear) {
       gear.setAttribute("aria-expanded", "true");
       gear.classList.add("is-live");
@@ -325,4 +348,119 @@
     });
   }
   if (catcher) catcher.addEventListener("click", closeMenu);
+
+  function jumpTo(sec) {
+    var pos = Math.max(0, Number(sec) || 0);
+    closeChapterFind();
+    closeMenu();
+    seekWhenReady(pos);
+    startPlay();
+  }
+
+  function closeChapterFind() {
+    if (chapterSheet) {
+      chapterSheet.remove();
+      chapterSheet = null;
+    }
+    document.documentElement.classList.remove("tag-modal-open");
+  }
+
+  function openChapterFind() {
+    closeMenu();
+    if (chapterSheet) {
+      closeChapterFind();
+      return;
+    }
+    if (!chapterTags.length) return;
+    var mask = document.createElement("div");
+    mask.className = "batch-tag-mask list-tag-mask";
+    var card = document.createElement("div");
+    card.className = "batch-tag-sheet list-tag-sheet";
+    var head = document.createElement("div");
+    head.className = "batch-tag-head";
+    var title = document.createElement("p");
+    title.textContent = "段落";
+    var close = document.createElement("button");
+    close.type = "button";
+    close.className = "batch-tag-close";
+    close.setAttribute("aria-label", "關閉");
+    close.textContent = "×";
+    close.addEventListener("click", closeChapterFind);
+    head.appendChild(title);
+    head.appendChild(close);
+    var body = document.createElement("div");
+    body.className = "list-tag-body";
+    var form = document.createElement("form");
+    form.className = "tag-picker-form";
+    form.autocomplete = "off";
+    var input = document.createElement("input");
+    input.className = "tag-search-input";
+    input.placeholder = "找段落？";
+    var go = document.createElement("button");
+    go.type = "submit";
+    go.className = "tag-apply";
+    go.innerHTML = '<span class="tag-apply-face">看這一段</span>';
+    form.appendChild(input);
+    form.appendChild(go);
+    var suggest = document.createElement("div");
+    suggest.className = "tag-picker-suggest";
+    body.appendChild(form);
+    body.appendChild(suggest);
+    card.appendChild(head);
+    card.appendChild(body);
+    mask.appendChild(card);
+    document.body.appendChild(mask);
+    chapterSheet = mask;
+    document.documentElement.classList.add("tag-modal-open");
+    if (window.FamiGate && window.FamiGate.lockSheetPage) window.FamiGate.lockSheetPage(mask);
+    var down = false;
+    mask.addEventListener("pointerdown", function (ev) { down = ev.target === mask; });
+    mask.addEventListener("pointerup", function (ev) {
+      if (down && ev.target === mask) closeChapterFind();
+      down = false;
+    });
+
+    function visibleTags() {
+      var q = String(input.value || "").trim();
+      if (!q) return chapterTags.slice();
+      var folded = q.replace(/\s+/g, "");
+      return chapterTags.filter(function (tag) {
+        var label = String(tag.label || tag.id || "");
+        return label.indexOf(q) >= 0 || label.replace(/\s+/g, "").indexOf(folded) >= 0;
+      });
+    }
+
+    function paintSuggest() {
+      suggest.innerHTML = "";
+      var tags = visibleTags();
+      if (!tags.length) return;
+      var cap = document.createElement("p");
+      cap.className = "tag-suggest-title";
+      cap.textContent = input.value.trim() ? "標籤" : "段落";
+      suggest.appendChild(cap);
+      tags.forEach(function (tag) {
+        var chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "tag-chip";
+        chip.textContent = tag.label || tag.id || "";
+        chip.addEventListener("click", function () { jumpTo(tag.start); });
+        suggest.appendChild(chip);
+      });
+    }
+
+    input.addEventListener("input", paintSuggest);
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var tags = visibleTags();
+      if (tags.length) jumpTo(tags[0].start);
+    });
+    paintSuggest();
+  }
+
+  if (chapterEntry) {
+    chapterEntry.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      openChapterFind();
+    });
+  }
 })();

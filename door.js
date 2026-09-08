@@ -1002,7 +1002,7 @@
     q.set("video", item.id);
     q.set("game", openGame || "");
     q.set("k", key);
-    q.set("wv", "3");
+    q.set("wv", "5");
     if (item.start) q.set("t", String(item.start));
     return "./watch.html?" + q.toString() + "#k=" + encodeURIComponent(key);
   }
