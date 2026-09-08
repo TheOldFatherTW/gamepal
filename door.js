@@ -27,6 +27,8 @@
   const HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20C10.5 18.4 7.3 15.8 5.4 11.9C4 9.1 5.2 6 8.4 6c1.8 0 3 1.1 3.6 2.2C12.6 7.1 13.8 6 15.6 6c3.2 0 4.4 3.1 3 5.9C16.7 15.8 13.5 18.4 12 20Z"/></svg>';
   const HEART_RAIL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20C10.5 18.4 7.3 15.8 5.4 11.9C4 9.1 5.2 6 8.4 6c1.8 0 3 1.1 3.6 2.2C12.6 7.1 13.8 6 15.6 6c3.2 0 4.4 3.1 3 5.9C16.7 15.8 13.5 18.4 12 20Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
   const LIST = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M6 12h12M6 17h8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+  const GRID = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="5.5" height="5.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="5" width="5.5" height="5.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="5" y="13.5" width="5.5" height="5.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="13.5" width="5.5" height="5.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>';
+  const PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6l12 6-12 6z" fill="currentColor"/></svg>';
   const MEM = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 9h8M8 13h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
   const PLUS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
   const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8V6.8A1.8 1.8 0 0 1 9.8 5h4.4A1.8 1.8 0 0 1 16 6.8V8M5 8h14M9 11v7M12 11v7M15 11v7M7 8l.8 12.2A1.6 1.6 0 0 0 9.4 22h5.2a1.6 1.6 0 0 0 1.6-1.8L17 8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -64,6 +66,11 @@
   let videoApplied = [];
   let videoPicked = [];
   let videoFindSheet = null;
+  let lastVideoItems = [];
+  let layoutBtn = null;
+  let listMode = false;
+  const LAYOUT_KEY = "gamepal.layout";
+  try { listMode = localStorage.getItem(LAYOUT_KEY) === "list"; } catch (e) {}
 
   function setBoot(on, text) {
     if (!hall) return;
@@ -493,7 +500,9 @@
     if (feed) {
       feed.hidden = !(onShelf || onVideos);
       feed.classList.toggle("is-film", onVideos);
+      feed.classList.toggle("news-list", onVideos && !!listMode);
     }
+    if (layoutBtn) layoutBtn.hidden = !onVideos;
     if (shelfBack) shelfBack.hidden = onShelf;
     const gear = document.getElementById("chat-settings");
     if (gear) gear.hidden = !onChat;
@@ -544,6 +553,11 @@
       bar.appendChild(btn);
     });
     if (openGame) {
+      layoutBtn = insButton("layout-toggle", listMode ? GRID : LIST, listMode ? "封面格子" : "橫條排列");
+      layoutBtn.hidden = hostTab !== "videos";
+      layoutBtn.addEventListener("click", function () { toggleLayout(); });
+      bar.appendChild(layoutBtn);
+      applyLayoutClass();
       const find = document.createElement("button");
       find.type = "button";
       find.className = "mode-btn mode-find" + (hostTab === "videos" ? " is-on" : "");
@@ -554,6 +568,8 @@
         openVideoFind();
       });
       bar.appendChild(find);
+    } else {
+      layoutBtn = null;
     }
     if (shelfBack) shelfBack.hidden = !openGame;
     ensureChatGear();
@@ -1030,6 +1046,73 @@
     readerReadyTimer = window.setTimeout(showReaderLive, 15000);
   }
 
+  function applyLayoutClass() {
+    if (feed) feed.classList.toggle("news-list", hostTab === "videos" && !!listMode);
+    if (layoutBtn) {
+      layoutBtn.hidden = hostTab !== "videos";
+      layoutBtn.classList.toggle("is-live", !!listMode);
+      const face = layoutBtn.querySelector(".ins-face");
+      if (face) face.innerHTML = listMode ? GRID : LIST;
+      layoutBtn.setAttribute("aria-label", listMode ? "封面格子" : "橫條排列");
+      layoutBtn.title = listMode ? "封面格子" : "橫條排列";
+    }
+  }
+
+  function toggleLayout() {
+    if (hostTab !== "videos") pickTab("videos");
+    listMode = !listMode;
+    try { localStorage.setItem(LAYOUT_KEY, listMode ? "list" : "grid"); } catch (e) {}
+    paintVideos();
+  }
+
+  function filmRow(item) {
+    catalog[item.id] = item;
+    const row = document.createElement("div");
+    row.className = "news-row";
+    row.dataset.id = item.id;
+    const face = document.createElement("div");
+    face.className = "row-face";
+    const title = document.createElement("strong");
+    title.textContent = item.title || "";
+    const ops = document.createElement("div");
+    ops.className = "row-ops";
+    const time = document.createElement("span");
+    time.textContent = item.duration ? clock(item.duration) : "";
+    const play = insButton("row-play", PLAY, "播放");
+    play.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (busy) return;
+      openWatch(item);
+    });
+    if (time.textContent) ops.appendChild(time);
+    ops.appendChild(play);
+    face.appendChild(title);
+    face.appendChild(ops);
+    row.appendChild(face);
+    row.addEventListener("click", function () {
+      if (busy) return;
+      openWatch(item);
+    });
+    return row;
+  }
+
+  function paintVideos(items) {
+    if (!feed) return;
+    if (items) lastVideoItems = items;
+    feed.innerHTML = "";
+    feed.classList.add("is-film");
+    applyLayoutClass();
+    lastVideoItems.forEach(function (it) {
+      feed.appendChild(listMode ? filmRow(it) : filmTile(it));
+    });
+    if (tagBoard) tagBoard.hidden = false;
+    paintFindHits();
+    paintModes();
+    paintLayer();
+    layoutStage();
+  }
+
   function filmTile(item) {
     catalog[item.id] = item;
     const btn = document.createElement("button");
@@ -1085,14 +1168,7 @@
     if (!feed || !openGame) return;
     const tokens = videoApplied.join(",");
     const x = await window.FamiGate.api("/api/videos?game=" + encodeURIComponent(openGame) + "&tags=" + encodeURIComponent(tokens), key, { timeout: 20000 });
-    feed.innerHTML = "";
-    feed.classList.add("is-film");
-    (x.j && x.j.items || []).forEach(function (it) { feed.appendChild(filmTile(it)); });
-    if (tagBoard) tagBoard.hidden = false;
-    paintFindHits();
-    paintModes();
-    paintLayer();
-    layoutStage();
+    paintVideos(x.j && x.j.items || []);
   }
 
   function closeVideoFind() {
