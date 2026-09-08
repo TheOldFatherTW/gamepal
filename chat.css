@@ -153,7 +153,7 @@ html.is-chat body {
   color: #0b57d0;
 }
 .play-line.is-me .play-bubble {
-  background: var(--rose, #c13584);
+  background: var(--rose, #478cbf);
   color: #fff;
   border-bottom-right-radius: 6px;
 }

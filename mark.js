@@ -8,7 +8,7 @@
     const img = document.createElement("img");
     img.className = "pal-mark-svg";
     img.alt = "";
-    img.src = "./icons/mark-180.png?v=1";
+    img.src = "./icons/mark-180.png?v=2";
     root.innerHTML = "";
     root.appendChild(img);
   }

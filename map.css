@@ -28,7 +28,7 @@
   display: none !important;
 }
 .map-hits button.tag-chip.is-on {
-  background: linear-gradient(120deg, #fa7e1e 0%, #d62976 48%, #962fbf 100%);
+  background: var(--chip-grad);
   border-color: transparent;
   color: #fff;
 }
