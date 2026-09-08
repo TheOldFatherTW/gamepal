@@ -1040,7 +1040,7 @@
       const img = document.createElement("img");
       img.alt = item.title || "";
       img.decoding = "async";
-      img.src = window.FamiGate.origin() + "/thumb?video=" + encodeURIComponent(item.id) + "&game=" + encodeURIComponent(openGame || "") + "&k=" + encodeURIComponent(key);
+      img.src = window.FamiGate.origin() + "/thumb?video=" + encodeURIComponent(item.id) + "&game=" + encodeURIComponent(openGame || "") + "&k=" + encodeURIComponent(key) + "&r=" + encodeURIComponent(item.cover_rev || 0);
       img.addEventListener("load", function () { img.classList.add("is-on"); });
       img.addEventListener("error", function () { img.hidden = true; });
       btn.appendChild(img);
@@ -1053,11 +1053,6 @@
     meta.textContent = item.duration ? clock(item.duration) : "";
     if (!meta.textContent) meta.hidden = true;
     btn.appendChild(meta);
-    const pct = document.createElement("span");
-    pct.className = "tile-pct";
-    pct.textContent = item.hit || item.title || "";
-    if (!pct.textContent) pct.hidden = true;
-    btn.appendChild(pct);
     btn.addEventListener("click", function () {
       if (busy) return;
       openWatch(item);
