@@ -1,4 +1,4 @@
-/* Product mark for GamePal — chat pad, not rose, not lissajous, not moon, not subway Y. */
+/* Product mark for GamePal — helper pad, not rose, not lissajous, not moon, not subway Y. */
 (function () {
   const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -8,7 +8,7 @@
     const img = document.createElement("img");
     img.className = "pal-mark-svg";
     img.alt = "";
-    img.src = "./icons/mark-180.png?v=3";
+    img.src = "./icons/mark-180.png?v=4";
     root.innerHTML = "";
     root.appendChild(img);
   }
