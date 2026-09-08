@@ -726,10 +726,10 @@ html.has-rail .feed {
 .tile.tile-film .tile-name span {
   display: inline-block;
   flex: 0 0 auto;
-  padding-right: 2.5em;
   white-space: nowrap;
 }
 .tile.tile-film .tile-name.is-run span {
+  padding-right: 2.5em;
   animation: news-marquee var(--marquee-s, 10s) linear infinite;
 }
 @media (max-width: 560px) and (pointer: coarse) {
@@ -1867,10 +1867,10 @@ html.is-reading body {
 .feed.news-list .news-row strong span {
   display: inline-block;
   flex: 0 0 auto;
-  padding-right: 2.5em;
   white-space: nowrap;
 }
 .feed.news-list .news-row strong.is-run span {
+  padding-right: 2.5em;
   animation: news-marquee var(--marquee-s, 10s) linear infinite;
 }
 @keyframes news-marquee {
