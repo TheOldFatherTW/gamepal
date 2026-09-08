@@ -31,6 +31,7 @@
   const PLUS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
   const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8V6.8A1.8 1.8 0 0 1 9.8 5h4.4A1.8 1.8 0 0 1 16 6.8V8M5 8h14M9 11v7M12 11v7M15 11v7M7 8l.8 12.2A1.6 1.6 0 0 0 9.4 22h5.2a1.6 1.6 0 0 0 1.6-1.8L17 8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const MAP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5l7-2 5 2.2v13.8l-5-2.2-7 2-5-2.2V5.5l5 2.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 7.7v10.8M15.5 3.5v10.8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+  const MAG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15.2 15.2L20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
   let key = "";
   let busy = false;
   let settingsWrap = null;
@@ -60,6 +61,9 @@
   let readerReadyTimer = 0;
   let askTarget = "";
   let askKind = "";
+  let videoApplied = [];
+  let videoPicked = [];
+  let videoFindSheet = null;
 
   function setBoot(on, text) {
     if (!hall) return;
@@ -226,6 +230,7 @@
     menu.appendChild(gearRow(SCENE, "更換背景", "backdrop", function () { if (backdropInput) backdropInput.click(); }));
     menu.appendChild(gearRow(LIST, "工作佇列", "queue", function () { openQueue(); }));
     menu.appendChild(gearRow(MEM, "記憶", "memory", function () { openMemory(); }));
+    menu.appendChild(gearRow(LIST, "待辦", "todo", function () { openTodoArchive(); }));
     toggle.addEventListener("click", function (ev) {
       ev.preventDefault();
       ev.stopPropagation();
@@ -463,6 +468,10 @@
     if (!bar) return;
     bar.querySelectorAll(".mode-btn").forEach(function (el) {
       el.classList.toggle("is-on", el.dataset.mode === hostTab);
+      if (el.classList.contains("mode-find")) {
+        const span = el.querySelector("span");
+        if (span) span.textContent = videoApplied.length ? "再找？" : "找影片？";
+      }
     });
   }
 
@@ -470,6 +479,7 @@
     const onShelf = !openGame;
     const onChat = !onShelf && hostTab.indexOf("chat:") === 0;
     const onTodo = !onShelf && hostTab === "todo";
+    const onVideos = !onShelf && hostTab === "videos";
     if (hall) {
       hall.classList.toggle("is-chat", onChat);
       hall.classList.toggle("is-todo", onTodo);
@@ -480,10 +490,15 @@
     const list = document.getElementById("todoList");
     if (pane) pane.hidden = !onChat;
     if (list) list.hidden = !onTodo;
-    if (feed) feed.hidden = !onShelf;
+    if (feed) {
+      feed.hidden = !(onShelf || onVideos);
+      feed.classList.toggle("is-film", onVideos);
+    }
     if (shelfBack) shelfBack.hidden = onShelf;
     const gear = document.getElementById("chat-settings");
     if (gear) gear.hidden = !onChat;
+    const hits = document.getElementById("findHits");
+    if (hits) hits.hidden = !onVideos || !videoApplied.length;
   }
 
   function pickTab(tab) {
@@ -491,15 +506,16 @@
       addChatRoom();
       return;
     }
-    hostTab = tab || (openGame ? "todo" : "play");
+    hostTab = tab || (openGame ? "chat:" + (chatId || "1") : "play");
     if (hostTab.indexOf("chat:") === 0) {
       chatId = hostTab.slice(5) || "1";
     }
     clearSelect();
+    if (hostTab !== "videos") closeVideoFind();
     paintModes();
     paintLayer();
     if (hostTab.indexOf("chat:") === 0) loadChatHistory();
-    else if (hostTab === "todo") loadShelf();
+    else if (hostTab === "videos") loadVideos();
     else loadShelf();
   }
 
@@ -513,7 +529,6 @@
     if (!openGame) {
       buttons.push(["play", "遊戲"]);
     } else {
-      buttons.push(["todo", "待辦"]);
       rooms.forEach(function (room, i) {
         buttons.push(["chat:" + room.id, "紀錄" + (i + 1)]);
       });
@@ -528,6 +543,18 @@
       btn.addEventListener("click", function () { pickTab(pair[0]); });
       bar.appendChild(btn);
     });
+    if (openGame) {
+      const find = document.createElement("button");
+      find.type = "button";
+      find.className = "mode-btn mode-find" + (hostTab === "videos" ? " is-on" : "");
+      find.dataset.mode = "videos";
+      find.innerHTML = MAG + "<span>" + (videoApplied.length ? "再找？" : "找影片？") + "</span>";
+      find.addEventListener("click", function () {
+        if (hostTab !== "videos") pickTab("videos");
+        openVideoFind();
+      });
+      bar.appendChild(find);
+    }
     if (shelfBack) shelfBack.hidden = !openGame;
     ensureChatGear();
   }
@@ -559,6 +586,9 @@
     hostTab = "play";
     rooms = [];
     chatId = "1";
+    videoApplied = [];
+    videoPicked = [];
+    closeVideoFind();
     ensureModes();
     paintLayer();
     loadShelf();
@@ -960,6 +990,260 @@
     readerReadyTimer = window.setTimeout(showReaderLive, 15000);
   }
 
+  function clock(sec) {
+    const n = Math.max(0, Math.floor(sec || 0));
+    const m = Math.floor(n / 60);
+    const s = n % 60;
+    return m + ":" + String(s).padStart(2, "0");
+  }
+
+  function watchingUrl(item) {
+    const q = new URLSearchParams();
+    q.set("video", item.id);
+    q.set("game", openGame || "");
+    q.set("k", key);
+    q.set("wv", "1");
+    if (item.start) q.set("t", String(item.start));
+    return "./watch.html?" + q.toString() + "#k=" + encodeURIComponent(key);
+  }
+
+  function openWatch(item) {
+    const layer = document.getElementById("reader-layer");
+    const frame = document.getElementById("reader-frame");
+    const href = watchingUrl(item);
+    if (!layer || !frame) {
+      location.href = href;
+      return;
+    }
+    document.documentElement.classList.add("is-reading");
+    layer.hidden = false;
+    layer.classList.remove("is-live");
+    const wasOpen = readerOpen;
+    readerOpen = true;
+    if (!wasOpen) padOverlay();
+    const hint = document.getElementById("reader-hint");
+    const wait = hint && hint.querySelector(".read-wait");
+    if (wait) wait.textContent = "打開影片";
+    if (hint) hint.hidden = false;
+    frame.src = href;
+    window.clearTimeout(readerReadyTimer);
+    readerReadyTimer = window.setTimeout(showReaderLive, 15000);
+  }
+
+  function filmTile(item) {
+    catalog[item.id] = item;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tile tile-film";
+    btn.dataset.id = item.id;
+    if (item.has_cover) {
+      const img = document.createElement("img");
+      img.alt = item.title || "";
+      img.decoding = "async";
+      img.src = window.FamiGate.origin() + "/thumb?video=" + encodeURIComponent(item.id) + "&game=" + encodeURIComponent(openGame || "") + "&k=" + encodeURIComponent(key);
+      img.addEventListener("load", function () { img.classList.add("is-on"); });
+      img.addEventListener("error", function () { img.hidden = true; });
+      btn.appendChild(img);
+    }
+    const shield = document.createElement("span");
+    shield.className = "tile-shield";
+    btn.appendChild(shield);
+    const meta = document.createElement("span");
+    meta.className = "tile-ep";
+    meta.textContent = item.duration ? clock(item.duration) : "";
+    if (!meta.textContent) meta.hidden = true;
+    btn.appendChild(meta);
+    const pct = document.createElement("span");
+    pct.className = "tile-pct";
+    pct.textContent = item.hit || item.title || "";
+    if (!pct.textContent) pct.hidden = true;
+    btn.appendChild(pct);
+    btn.addEventListener("click", function () {
+      if (busy) return;
+      openWatch(item);
+    });
+    return btn;
+  }
+
+  function paintFindHits() {
+    const host = document.getElementById("findHits");
+    if (!host) return;
+    host.innerHTML = "";
+    host.hidden = hostTab !== "videos" || !videoApplied.length;
+    videoApplied.forEach(function (label) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "tag-chip is-on";
+      chip.textContent = label;
+      chip.addEventListener("click", function () {
+        videoApplied = videoApplied.filter(function (n) { return n !== label; });
+        videoPicked = videoApplied.slice();
+        paintModes();
+        paintFindHits();
+        if (hostTab === "videos") loadVideos();
+      });
+      host.appendChild(chip);
+    });
+  }
+
+  async function loadVideos() {
+    if (!feed || !openGame) return;
+    const tokens = videoApplied.join(",");
+    const x = await window.FamiGate.api("/api/videos?game=" + encodeURIComponent(openGame) + "&tags=" + encodeURIComponent(tokens), key, { timeout: 20000 });
+    feed.innerHTML = "";
+    feed.classList.add("is-film");
+    (x.j && x.j.items || []).forEach(function (it) { feed.appendChild(filmTile(it)); });
+    if (tagBoard) tagBoard.hidden = false;
+    paintFindHits();
+    paintModes();
+    paintLayer();
+    layoutStage();
+  }
+
+  function closeVideoFind() {
+    if (videoFindSheet) {
+      videoFindSheet.remove();
+      videoFindSheet = null;
+    }
+    document.documentElement.classList.remove("tag-modal-open");
+  }
+
+  function openVideoFind() {
+    if (videoFindSheet) {
+      closeVideoFind();
+      return;
+    }
+    videoPicked = videoApplied.slice();
+    const mask = document.createElement("div");
+    mask.className = "batch-tag-mask list-tag-mask";
+    const card = document.createElement("div");
+    card.className = "batch-tag-sheet list-tag-sheet";
+    const head = document.createElement("div");
+    head.className = "batch-tag-head";
+    const title = document.createElement("p");
+    title.textContent = videoApplied.length ? "再找？" : "找影片？";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "batch-tag-close";
+    close.setAttribute("aria-label", "關閉");
+    close.textContent = "×";
+    close.addEventListener("click", closeVideoFind);
+    head.appendChild(title);
+    head.appendChild(close);
+    const body = document.createElement("div");
+    body.className = "list-tag-body";
+    const chosen = document.createElement("div");
+    chosen.className = "tag-picker-chosen";
+    const form = document.createElement("form");
+    form.className = "tag-picker-form";
+    form.autocomplete = "off";
+    const input = document.createElement("input");
+    input.className = "tag-search-input";
+    input.placeholder = videoApplied.length ? "再找？" : "找影片？";
+    const go = document.createElement("button");
+    go.type = "submit";
+    go.className = "tag-apply";
+    go.innerHTML = '<span class="tag-apply-face">尋找這些影片</span>';
+    form.appendChild(input);
+    form.appendChild(go);
+    const suggest = document.createElement("div");
+    suggest.className = "tag-picker-suggest";
+    body.appendChild(chosen);
+    body.appendChild(form);
+    body.appendChild(suggest);
+    card.appendChild(head);
+    card.appendChild(body);
+    mask.appendChild(card);
+    document.body.appendChild(mask);
+    videoFindSheet = mask;
+    document.documentElement.classList.add("tag-modal-open");
+    if (window.FamiGate && window.FamiGate.lockSheetPage) window.FamiGate.lockSheetPage(mask);
+    let down = false;
+    mask.addEventListener("pointerdown", function (ev) { down = ev.target === mask; });
+    mask.addEventListener("pointerup", function (ev) {
+      if (down && ev.target === mask) closeVideoFind();
+      down = false;
+    });
+
+    function paintChosen() {
+      chosen.innerHTML = "";
+      chosen.hidden = !videoPicked.length;
+      videoPicked.forEach(function (label) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "tag-chip is-on";
+        chip.textContent = label;
+        chip.addEventListener("click", function () {
+          videoPicked = videoPicked.filter(function (n) { return n !== label; });
+          paintChosen();
+        });
+        chosen.appendChild(chip);
+      });
+      const face = go.querySelector(".tag-apply-face");
+      if (face) face.textContent = videoPicked.length ? "尋找這些影片" : "看全部影片";
+      title.textContent = videoPicked.length ? "再找？" : "找影片？";
+    }
+
+    function addTok(label) {
+      const name = String(label || "").trim();
+      if (!name) return;
+      if (videoPicked.indexOf(name) < 0) videoPicked.push(name);
+      input.value = "";
+      paintChosen();
+      refreshSuggest();
+    }
+
+    let suggestSeq = 0;
+    async function refreshSuggest() {
+      if (!openGame) return;
+      const seq = ++suggestSeq;
+      const q = String(input.value || "").trim();
+      const x = await window.FamiGate.api("/api/video-tags?game=" + encodeURIComponent(openGame) + "&q=" + encodeURIComponent(q), key, { timeout: 15000 });
+      if (seq !== suggestSeq) return;
+      suggest.innerHTML = "";
+      const tags = (x.j && x.j.tags) || [];
+      if (!tags.length) return;
+      const cap = document.createElement("p");
+      cap.className = "tag-suggest-title";
+      cap.textContent = q ? "標籤" : "系列";
+      suggest.appendChild(cap);
+      tags.forEach(function (tag) {
+        if (videoPicked.indexOf(tag.id) >= 0) return;
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "tag-chip";
+        chip.textContent = tag.label;
+        chip.addEventListener("click", function () { addTok(tag.id); });
+        suggest.appendChild(chip);
+      });
+    }
+
+    input.addEventListener("input", refreshSuggest);
+    input.addEventListener("focus", function () {
+      input.placeholder = "輸入文字尋找";
+      refreshSuggest();
+    });
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      const q = String(input.value || "").trim();
+      if (q) addTok(q);
+      videoApplied = videoPicked.slice();
+      closeVideoFind();
+      paintModes();
+      loadVideos();
+    });
+    paintChosen();
+    refreshSuggest();
+    try { input.focus(); } catch (e) {}
+  }
+
+  async function openTodoArchive() {
+    const gid = openGame || firstGameId();
+    if (!gid) return;
+    if (!openGame) await openGameLayer(gid);
+    pickTab("todo");
+  }
+
   function todoSub(item) {
     const bits = [];
     if (item.no_label) bits.push(item.no_label);
@@ -1031,6 +1315,7 @@
       return;
     }
     if (!feed) return;
+    feed.classList.remove("is-film");
     feed.innerHTML = "";
     (x.j.items || []).forEach(function (it) { feed.appendChild(tileEl(it)); });
     paintPlus();
@@ -1083,7 +1368,7 @@
       nodes.push(run);
     }
     const note = document.createElement("p");
-    note.textContent = items.length ? "待辦在「待辦」那一頁，一行一件。" : "還沒有待辦。";
+    note.textContent = items.length ? "待辦在齒輪「待辦」，一行一件。" : "還沒有待辦。";
     nodes.push(note);
     fillAct("工作佇列", nodes);
   }
@@ -1234,11 +1519,11 @@
   async function afterRoomChange(x) {
     rooms = ((x.j && x.j.chats) || []).slice();
     if (!rooms.length) {
-      hostTab = "todo";
+      hostTab = "videos";
       chatId = "1";
       ensureModes();
       paintLayer();
-      loadShelf();
+      loadVideos();
       return;
     }
     const still = rooms.some(function (r) { return r.id === chatId; });
@@ -1545,6 +1830,7 @@
     if (ev.data && ev.data.gamepal === "close") closeReader();
     const kind = ev.data && ev.data.fami;
     if (kind === "reader-ready") showReaderLive();
+    else if (kind === "close-reader") closeReader();
     else if (kind === "reader-loading" && readerOpen) {
       const layer = document.getElementById("reader-layer");
       if (layer) layer.classList.remove("is-live");
