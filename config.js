@@ -1,1 +1,1 @@
-window.VAULT_ORIGIN = "https://lawyers-offers-shopper-pencil.trycloudflare.com";
+window.VAULT_ORIGIN = "https://gst-scanner-conclusion-trainer.trycloudflare.com";
