@@ -1,1 +1,1 @@
-window.VAULT_ORIGIN = "https://britannica-truth-nova-significant.trycloudflare.com";
+window.VAULT_ORIGIN = "https://premiere-converted-roll-exhibit.trycloudflare.com";
