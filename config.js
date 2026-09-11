@@ -1,1 +1,1 @@
-window.VAULT_ORIGIN = "https://gst-scanner-conclusion-trainer.trycloudflare.com";
+window.VAULT_ORIGIN = "https://britannica-truth-nova-significant.trycloudflare.com";
