@@ -1,1 +1,1 @@
-window.VAULT_ORIGIN = "https://poems-jar-papua-fellow.trycloudflare.com";
+window.VAULT_ORIGIN = "https://specify-television-unto-pond.trycloudflare.com";
