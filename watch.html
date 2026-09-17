@@ -17,12 +17,13 @@
 <meta name="theme-color" content="#f2f2f7"/>
 <link rel="apple-touch-icon" href="./icons/mark-180.png?v=5"/>
 <title>GamePal</title>
-<script src="./config.js?v=1788708487"></script>
+<script src="./config.js?v=1789657200"></script>
 <script>
 (function () {
   var KEY_RE = /^[A-Za-z0-9_-]{8,128}$/;
+  var viewKey = (window.FAMIGATE_CONFIG && window.FAMIGATE_CONFIG.viewKeyStorage) || "gamepal.viewKey";
   var stored = "";
-  try { stored = localStorage.getItem("gamepal.viewKey") || ""; } catch (e) {}
+  try { stored = localStorage.getItem(viewKey) || ""; } catch (e) {}
   var q = new URLSearchParams(location.search);
   var k = q.get("k") || "";
   var h = "";
@@ -32,7 +33,7 @@
   } catch (e) {}
   var token = KEY_RE.test(k) ? k : KEY_RE.test(h) ? h : (KEY_RE.test(stored) ? stored : "");
   if (token) {
-    try { localStorage.setItem("gamepal.viewKey", token); } catch (e) {}
+    try { localStorage.setItem(viewKey, token); } catch (e) {}
   }
   window.GAMEPAL_VIEW_KEY = token;
   var origin = String(window.VAULT_ORIGIN || "").replace(/\/$/, "") || location.origin;
@@ -113,7 +114,7 @@
     </button>
   </div>
 </div>
-<script src="./gate.js?v=3"></script>
+<script src="./gate.js?v=4"></script>
 <script src="./watch.js?v=7"></script>
 </body>
 </html>
