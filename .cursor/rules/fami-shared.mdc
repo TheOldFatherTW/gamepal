@@ -1,0 +1,27 @@
+---
+description: Fami 可分享門面共用政策 — 100% 共用 chrome、禁止第三種卡、對齊 fami-shared-ui。
+alwaysApply: true
+---
+
+# Fami 共用門面（GamePal / FamiBook / Kodohon）
+
+本庫是 **可分享 Fami 門面** 之一，與 `famibook`、`kodohon` 同一政策。
+
+## 必守
+
+- **能共用的物件 100% 共用**：返回、確認、找卡／操作卡、齒輪、愛心、首頁頭、等待 UI、鍵盤抬起、sheet 鎖頁等 — 大家長得一樣
+- **不要各做第三種卡**：禁止自造新的卡片類型、私製按鈕或第三套門面殼
+- **詞彙表**：開工前讀 skill **`fami-shared-ui`**（返回／確認／找卡／操作卡／愛心／首頁頭等）
+- **FamiGate**：優先沿用 `gate.js` 的 `window.FamiGate`；無充分理由不得 fork 或複製第二套 gate
+- **兄弟門面**：改共用 chrome 時，同一回合檢查 **famibook、kodohon、gamepal**，避免只修一庫
+
+## 架構提醒
+
+- GitHub Pages 門面 + `config.js` 的 **`VAULT_ORIGIN`** 指向家裡保險庫
+- 鑰匙與私密資料不上 Pages；產品邏輯可各專案不同，**殼不行各做各的**
+
+## 不要
+
+- 不要做「精簡版／閹割版」門面（少封面、少長押、少齒輪圖示）除非使用者明確允許
+- 不要為單一特例硬編碼 magic number 或只服務一案的 if 分支 — 用可配置、可重用方式實作
+- 不要引入與 YRoom 混用的 storage 前綴或共用 vault 連線（YRoom 是隔離產品，見 yroom 專案規則）
