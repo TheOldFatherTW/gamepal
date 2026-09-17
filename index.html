@@ -23,15 +23,17 @@
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="./app.css?v=13"/>
 <link rel="stylesheet" href="./chat.css?v=12"/>
-<script src="./config.js?v=1789574216"></script>
+<script src="./config.js?v=1789657200"></script>
 <script>
 (function () {
   var KEY_RE = /^[A-Za-z0-9_-]{8,128}$/;
+  var viewKey = (window.FAMIGATE_CONFIG && window.FAMIGATE_CONFIG.viewKeyStorage) || "gamepal.viewKey";
+  var cookieRe = new RegExp("(?:^|; )" + viewKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "=([^;]*)");
   var stored = "";
-  try { stored = localStorage.getItem("gamepal.viewKey") || ""; } catch (e) {}
+  try { stored = localStorage.getItem(viewKey) || ""; } catch (e) {}
   var cookie = "";
   try {
-    var m = document.cookie.match(/(?:^|; )gamepal\.viewKey=([^;]*)/);
+    var m = document.cookie.match(cookieRe);
     cookie = m ? decodeURIComponent(m[1]) : "";
   } catch (e) {}
   var q = new URLSearchParams(location.search).get("k") || "";
@@ -49,7 +51,7 @@
   window.GAMEPAL_URL_KEY = fromUrl;
   window.GAMEPAL_VIEW_KEY = token;
   if (token) {
-    try { localStorage.setItem("gamepal.viewKey", token); } catch (e) {}
+    try { localStorage.setItem(viewKey, token); } catch (e) {}
     if (typeof navigator.standalone === "boolean" && !navigator.standalone) {
       var pin = location.pathname + "?k=" + encodeURIComponent(token) + "#k=" + encodeURIComponent(token);
       if (location.pathname + location.search + location.hash !== pin) {
@@ -190,7 +192,7 @@
   <iframe id="reader-frame" title="陪玩" src="about:blank"></iframe>
 </div>
 <script src="./mark.js?v=5"></script>
-<script src="./gate.js?v=3"></script>
+<script src="./gate.js?v=4"></script>
 <script src="./door.js?v=44"></script>
 </body>
 </html>
