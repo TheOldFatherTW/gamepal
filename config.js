@@ -1,1 +1,1 @@
-window.VAULT_ORIGIN = "https://duration-copy-maximum-match.trycloudflare.com";
+window.VAULT_ORIGIN = "https://notes-appraisal-furniture-bouquet.trycloudflare.com";
